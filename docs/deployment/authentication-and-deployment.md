@@ -56,7 +56,9 @@ This guide covers every deployment model for the Zscaler MCP Server, including t
 
 ## Architecture Overview
 
-The Zscaler MCP Server has two independent authentication layers:
+The Zscaler MCP Server has two authentication layers. They are independent in
+API-key, JWT, and programmatic `auth=` modes; delegated `zscaler` mode intentionally
+connects them for the lifetime of each request:
 
 ```text
 ┌───────────────┐         ┌──────────────────────────────┐         ┌─────────────────┐
@@ -70,7 +72,7 @@ The Zscaler MCP Server has two independent authentication layers:
 
 **Layer 1 (this guide):** Controls which MCP clients can connect to the server. Configured via `ZSCALER_MCP_AUTH_*` environment variables.
 
-**Layer 2 (separate):** The Zscaler API credentials (`ZSCALER_CLIENT_ID`, `ZSCALER_CLIENT_SECRET`, etc.) that the server uses to call Zscaler APIs. These are always required regardless of Layer 1 settings.
+**Layer 2:** The Zscaler API credentials (`ZSCALER_CLIENT_ID`, `ZSCALER_CLIENT_SECRET`, etc.) that the server uses to call Zscaler APIs. They normally come from server configuration. In delegated `zscaler` mode, validated request credentials and tenant-routing headers supply them instead.
 
 > **Note:** Layer 1 can be configured either via environment variables (`ZSCALER_MCP_AUTH_*`) or programmatically via the `auth=` parameter. OIDCProxy mode uses the programmatic approach and provides full OAuth 2.1 compliance with Dynamic Client Registration.
 
@@ -253,15 +255,19 @@ Validates Zscaler OneAPI client credentials by calling Zscaler's OAuth2 `/token`
 ZSCALER_MCP_AUTH_ENABLED=true
 ZSCALER_MCP_AUTH_MODE=zscaler
 
-# These are reused from the Layer 2 Zscaler API config
-ZSCALER_VANITY_DOMAIN=your-vanity-domain
-ZSCALER_CLOUD=production    # or "beta"
+# Optional defaults when a client omits the corresponding routing header
+# ZSCALER_VANITY_DOMAIN=your-default-vanity-domain
+# ZSCALER_CUSTOMER_ID=your-default-customer-id
+# ZSCALER_CLOUD=production
 ```
 
 **Client sends (Method 1 — Basic Auth):**
 
 ```text
 Authorization: Basic base64(client_id:client_secret)
+X-Zscaler-Vanity-Domain: your-vanity-domain
+X-Zscaler-Customer-ID: your-customer-id
+X-Zscaler-Cloud: production
 ```
 
 The `Authorization` header contains the Base64-encoded string of `client_id:client_secret`. For example, if your client ID is `abc123` and your secret is `xyz789`:
@@ -277,6 +283,9 @@ echo -n "abc123:xyz789" | base64
 ```text
 X-Zscaler-Client-ID: your-client-id
 X-Zscaler-Client-Secret: your-client-secret
+X-Zscaler-Vanity-Domain: your-vanity-domain
+X-Zscaler-Customer-ID: your-customer-id
+X-Zscaler-Cloud: production
 ```
 
 This alternative avoids Base64 encoding. Both methods are supported; the server checks custom headers first, then falls back to Basic Auth.
@@ -286,7 +295,10 @@ This alternative avoids Base64 encoding. Both methods are supported; the server 
 - Validates credentials against Zscaler's `/oauth2/v1/token` endpoint
 - Successful validations are cached for the token's lifetime (typically 1 hour)
 - No additional IdP required — uses Zscaler's own auth infrastructure
-- The `client_id` and `client_secret` used for MCP client auth can be the same as or different from the Layer 2 API credentials
+- The validated `client_id` and `client_secret` become the Layer 2 credentials for that request
+- Request-local isolation allows concurrent clients to use different tenants safely
+- `X-Zscaler-Customer-ID` is required for ZPA and ZMS unless the request uses the configured default tenant and customer ID
+- Only `production` and `beta` are accepted for request-supplied cloud routing
 - Best for: Zscaler-native deployments, teams already managing Zscaler API credentials
 
 ---
@@ -442,7 +454,9 @@ ZSCALER_MCP_AUTH_API_KEY=sk-your-secret-key-here
 # .env — add these lines
 ZSCALER_MCP_AUTH_ENABLED=true
 ZSCALER_MCP_AUTH_MODE=zscaler
-# ZSCALER_VANITY_DOMAIN and ZSCALER_CLOUD are reused from your API config
+# Layer 2 credentials and tenant routing are supplied by each request.
+# Existing ZSCALER_VANITY_DOMAIN, ZSCALER_CUSTOMER_ID, and ZSCALER_CLOUD
+# values act only as optional defaults.
 ```
 
 **JWT mode** (see [important caveat about `mcp-remote`](#jwt-mode--mcp-remote-oauth-discovery-failure)):
@@ -721,14 +735,31 @@ See [421 Misdirected Request](#421-misdirected-request-invalid-host-header) for 
 
 > **Layer 1 vs. Layer 2 — what goes where?**
 >
-> The client configurations below only handle **Layer 1** — authenticating the MCP client to the server (API key, JWT, or Zscaler credentials in the `Authorization` header).
+> The client configurations below normally handle **Layer 1** — authenticating the MCP client to the server.
 >
-> **Layer 2** settings — `ZSCALER_CLIENT_ID`, `ZSCALER_CLIENT_SECRET`, `ZSCALER_VANITY_DOMAIN`, `ZSCALER_CUSTOMER_ID`, `ZSCALER_CLOUD`, `ZSCALER_MCP_WRITE_ENABLED`, `ZSCALER_MCP_WRITE_TOOLS`, and all other `ZSCALER_*` variables — are configured **on the server side** via the `.env` file. The client never sends or needs these values; the server loads them from `.env` at startup and uses them to call Zscaler APIs on behalf of the client.
+> In `api-key`, `jwt`, and programmatic `auth=` modes, **Layer 2** credentials remain server-side in `.env`. In `zscaler` mode, the validated `client_id` and `client_secret` from Basic Auth are delegated to Layer 2 for the current request. The client also supplies `X-Zscaler-Vanity-Domain`, `X-Zscaler-Customer-ID` (for ZPA/ZMS), and optionally `X-Zscaler-Cloud`.
 >
-> In short:
+> Server policy is never delegated: write-tool enablement, tool selection, source-IP controls, and other `ZSCALER_MCP_*` settings remain process-wide server configuration.
 >
-> - **Client config** = URL + auth header (how to reach and authenticate with the MCP server)
-> - **Server `.env`** = Zscaler API credentials + service/tool/write-mode configuration (how the server talks to Zscaler)
+> In short for delegated `zscaler` mode:
+>
+> - **Client config** = URL + Basic Auth + tenant-routing headers
+> - **Server `.env`** = MCP security and tool policy, plus optional default tenant routing
+
+Example headers for a tenant:
+
+```text
+Authorization: Basic base64(client_id:client_secret)
+X-Zscaler-Vanity-Domain: tenant-label
+X-Zscaler-Customer-ID: customer-id
+X-Zscaler-Cloud: production
+```
+
+Send these headers on every MCP HTTP request and use HTTPS. Request credentials are
+isolated with request-local context and are removed when the request completes. When a
+request selects a vanity domain other than the server default, the server does not reuse
+the default customer ID. The process-wide entitlement filter is disabled in delegated
+`zscaler` mode because each tenant can have different entitlements.
 
 ### Claude Desktop
 
@@ -1660,8 +1691,9 @@ SKIP_SERVER_START=true \
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `ZSCALER_VANITY_DOMAIN` | Yes | — | Your Zscaler vanity domain (reused from Layer 2) |
-| `ZSCALER_CLOUD` | No | `production` | Zscaler cloud environment (reused from Layer 2) |
+| `ZSCALER_VANITY_DOMAIN` | No | — | Default vanity domain when the request omits `X-Zscaler-Vanity-Domain` |
+| `ZSCALER_CUSTOMER_ID` | No | — | Default customer ID for the default tenant |
+| `ZSCALER_CLOUD` | No | `production` | Default cloud when the request omits `X-Zscaler-Cloud` |
 
 **OIDCProxy mode** (programmatic — not configured via env vars):
 
@@ -1677,7 +1709,9 @@ OIDCProxy mode is configured programmatically via the `auth=` parameter, not thr
 
 ### Zscaler API Credentials (Layer 2)
 
-These are always required, regardless of Layer 1 auth settings.
+These are required for stdio, API-key, JWT, and programmatic `auth=` modes. In delegated
+`zscaler` mode, the request supplies them instead and the environment values are optional
+defaults.
 
 | Variable | Required | Description |
 |----------|----------|-------------|

@@ -27,6 +27,7 @@ from zscaler_mcp.auth import (
     ZscalerAuthProvider,
     apply_auth_middleware,
 )
+from zscaler_mcp.request_credentials import get_delegated_credentials
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -255,9 +256,9 @@ class TestJWTAuthProvider:
 
 
 class TestZscalerAuthProvider:
-    def test_empty_vanity_domain_rejected(self):
-        with pytest.raises(ValueError):
-            ZscalerAuthProvider(vanity_domain="")
+    def test_empty_default_vanity_domain_allows_request_routing(self):
+        p = ZscalerAuthProvider(vanity_domain="")
+        assert p.vanity_domain == ""
 
     def test_production_token_url(self):
         p = ZscalerAuthProvider(vanity_domain="acme", cloud="production")
@@ -328,6 +329,67 @@ class TestZscalerAuthProvider:
         result = p._check_cache(cred_hash)
         assert result is None
         assert cred_hash not in p._cache
+
+    def test_basic_auth_returns_delegated_tenant_credentials(self, monkeypatch):
+        monkeypatch.setattr(
+            "zscaler_mcp.auth.fetch_oneapi_token",
+            lambda **kwargs: ("validated-token", None),
+        )
+        p = ZscalerAuthProvider()
+        payload = base64.b64encode(b"request-id:request-secret").decode()
+        headers = [
+            (b"x-zscaler-vanity-domain", b"tenant-one"),
+            (b"x-zscaler-customer-id", b"customer-one"),
+            (b"x-zscaler-cloud", b"beta"),
+        ]
+
+        ok, err, credentials = _run_async(
+            p.authenticate_with_credentials(f"Basic {payload}", headers)
+        )
+
+        assert ok is True
+        assert err is None
+        assert credentials.client_id == "request-id"
+        assert credentials.client_secret == "request-secret"
+        assert credentials.vanity_domain == "tenant-one"
+        assert credentials.customer_id == "customer-one"
+        assert credentials.cloud == "beta"
+
+    def test_request_tenant_is_used_for_token_validation(self, monkeypatch):
+        calls = []
+
+        def fake_fetch(**kwargs):
+            calls.append(kwargs)
+            return "validated-token", None
+
+        monkeypatch.setattr("zscaler_mcp.auth.fetch_oneapi_token", fake_fetch)
+        p = ZscalerAuthProvider(vanity_domain="server-tenant")
+        payload = base64.b64encode(b"id:secret").decode()
+        headers = [(b"x-zscaler-vanity-domain", b"request-tenant")]
+
+        ok, _ = _run_async(p.authenticate(f"Basic {payload}", headers))
+
+        assert ok is True
+        assert calls[0]["vanity_domain"] == "request-tenant"
+
+    def test_missing_request_and_default_vanity_domain_is_rejected(self):
+        p = ZscalerAuthProvider()
+        payload = base64.b64encode(b"id:secret").decode()
+        ok, err = _run_async(p.authenticate(f"Basic {payload}"))
+        assert ok is False
+        assert "X-Zscaler-Vanity-Domain" in err
+
+    def test_invalid_request_tenant_is_rejected_before_network(self, monkeypatch):
+        monkeypatch.setattr(
+            "zscaler_mcp.auth.fetch_oneapi_token",
+            lambda **kwargs: pytest.fail("invalid routing must not reach the network"),
+        )
+        p = ZscalerAuthProvider()
+        payload = base64.b64encode(b"id:secret").decode()
+        headers = [(b"x-zscaler-vanity-domain", b"tenant.example.com")]
+        ok, err = _run_async(p.authenticate(f"Basic {payload}", headers))
+        assert ok is False
+        assert "Invalid Zscaler tenant routing" in err
 
 
 # ---------------------------------------------------------------------------
@@ -424,6 +486,74 @@ class TestAuthMiddleware:
         assert "jsonrpc" in body
         assert body["error"]["code"] == -32001
 
+    def test_zscaler_credentials_are_bound_only_while_app_runs(self, monkeypatch):
+        monkeypatch.setattr(
+            "zscaler_mcp.auth.fetch_oneapi_token",
+            lambda **kwargs: ("validated-token", None),
+        )
+        seen = []
+
+        async def observing_app(scope, receive, send):
+            seen.append(get_delegated_credentials())
+            await self._ok_app(scope, receive, send)
+
+        provider = ZscalerAuthProvider()
+        app = AuthMiddleware(observing_app, provider)
+        payload = base64.b64encode(b"id:secret").decode()
+        scope = self._make_scope(
+            headers=[
+                (b"authorization", f"Basic {payload}".encode()),
+                (b"x-zscaler-vanity-domain", b"tenant-one"),
+            ]
+        )
+
+        responses = self._collect_responses(app, scope)
+
+        assert responses[0]["status"] == 200
+        assert seen[0].client_id == "id"
+        assert get_delegated_credentials() is None
+
+    def test_concurrent_zscaler_requests_do_not_leak_credentials(self, monkeypatch):
+        monkeypatch.setattr(
+            "zscaler_mcp.auth.fetch_oneapi_token",
+            lambda **kwargs: (f"token-{kwargs['client_id']}", None),
+        )
+        seen = {}
+
+        async def observing_app(scope, receive, send):
+            before = get_delegated_credentials()
+            await asyncio.sleep(0)
+            after = get_delegated_credentials()
+            seen[before.client_id] = (before.vanity_domain, after.vanity_domain)
+
+        app = AuthMiddleware(observing_app, ZscalerAuthProvider())
+
+        def scope_for(client_id, tenant):
+            payload = base64.b64encode(f"{client_id}:secret".encode()).decode()
+            return self._make_scope(
+                headers=[
+                    (b"authorization", f"Basic {payload}".encode()),
+                    (b"x-zscaler-vanity-domain", tenant.encode()),
+                ]
+            )
+
+        async def run_both():
+            async def send(_message):
+                return None
+
+            await asyncio.gather(
+                app(scope_for("id-one", "tenant-one"), None, send),
+                app(scope_for("id-two", "tenant-two"), None, send),
+            )
+
+        _run_async(run_both())
+
+        assert seen == {
+            "id-one": ("tenant-one", "tenant-one"),
+            "id-two": ("tenant-two", "tenant-two"),
+        }
+        assert get_delegated_credentials() is None
+
 
 # ---------------------------------------------------------------------------
 # apply_auth_middleware factory
@@ -440,6 +570,7 @@ class TestApplyAuthMiddleware:
         "ZSCALER_MCP_AUTH_AUDIENCE",
         "ZSCALER_MCP_AUTH_ALGORITHMS",
         "ZSCALER_VANITY_DOMAIN",
+        "ZSCALER_CUSTOMER_ID",
         "ZSCALER_CLOUD",
     ]
 
@@ -626,12 +757,13 @@ class TestApplyAuthMiddleware:
         finally:
             self._clean_env()
 
-    def test_zscaler_mode_missing_domain_raises(self):
-        """zscaler mode without VANITY_DOMAIN raises SystemExit."""
+    def test_zscaler_mode_can_take_domain_from_request(self):
+        """Explicit zscaler mode can omit a server-wide tenant default."""
         self._clean_env()
         os.environ["ZSCALER_MCP_AUTH_MODE"] = "zscaler"
         try:
-            with pytest.raises(SystemExit, match="Authentication is enabled"):
-                apply_auth_middleware("app", "streamable-http")
+            result = apply_auth_middleware("app", "streamable-http")
+            assert isinstance(result, AuthMiddleware)
+            assert result.provider.vanity_domain == ""
         finally:
             self._clean_env()

@@ -18,6 +18,7 @@ import warnings
 from dotenv import load_dotenv
 from zscaler import ZscalerClient
 
+from .request_credentials import get_delegated_credentials, resolve_zscaler_value
 from .utils.utils import get_combined_user_agent
 
 # Suppress SyntaxWarnings emitted by the upstream zscaler SDK DLP modules.
@@ -25,13 +26,6 @@ warnings.filterwarnings("ignore", category=SyntaxWarning, module="zscaler.zia.dl
 warnings.filterwarnings("ignore", category=SyntaxWarning, module="zscaler.zia.dlp_engine")
 
 logger = logging.getLogger(__name__)
-
-
-def _required(value, env_name):
-    """Resolve a credential value, falling back to the environment."""
-    if value not in (None, ""):
-        return value
-    return os.getenv(env_name)
 
 
 def get_zscaler_client(
@@ -78,12 +72,20 @@ def get_zscaler_client(
     if user_agent_comment is None:
         user_agent_comment = os.getenv("ZSCALER_MCP_USER_AGENT_COMMENT")
 
-    client_id = _required(client_id, "ZSCALER_CLIENT_ID")
-    client_secret = _required(client_secret, "ZSCALER_CLIENT_SECRET")
-    customer_id = _required(customer_id, "ZSCALER_CUSTOMER_ID")
-    vanity_domain = _required(vanity_domain, "ZSCALER_VANITY_DOMAIN")
-    cloud = _required(cloud, "ZSCALER_CLOUD")
-    private_key = _required(private_key, "ZSCALER_PRIVATE_KEY")
+    delegated = get_delegated_credentials()
+    client_id = resolve_zscaler_value("client_id", "ZSCALER_CLIENT_ID", explicit=client_id)
+    client_secret = resolve_zscaler_value(
+        "client_secret", "ZSCALER_CLIENT_SECRET", explicit=client_secret
+    )
+    customer_id = resolve_zscaler_value("customer_id", "ZSCALER_CUSTOMER_ID", explicit=customer_id)
+    vanity_domain = resolve_zscaler_value(
+        "vanity_domain", "ZSCALER_VANITY_DOMAIN", explicit=vanity_domain
+    )
+    cloud = resolve_zscaler_value("cloud", "ZSCALER_CLOUD", explicit=cloud)
+    # Delegated Basic Auth always supplies a client secret. Never combine it
+    # with a process-wide private key from another credential set.
+    if private_key in (None, ""):
+        private_key = None if delegated is not None else os.getenv("ZSCALER_PRIVATE_KEY")
 
     auth_fields = {
         "ZSCALER_CLIENT_ID": client_id,
@@ -94,9 +96,14 @@ def get_zscaler_client(
 
     missing = [name for name, value in auth_fields.items() if not (value and value.strip())]
     if missing:
+        source_hint = (
+            "Send the corresponding Zscaler tenant-routing header."
+            if delegated is not None
+            else "Set them in the environment or .env file."
+        )
         raise RuntimeError(
             "Zscaler SDK failed to initialize due to missing OneAPI credentials: "
-            f"{missing}. Set them in the environment or .env file."
+            f"{missing}. {source_hint}"
         )
 
     if not client_secret and not private_key:
@@ -106,7 +113,12 @@ def get_zscaler_client(
         )
 
     custom_user_agent = get_combined_user_agent(user_agent_comment)
-    logger.debug("[client] OneAPI client init (service=%s, ua=%s)", service, custom_user_agent)
+    logger.debug(
+        "[client] OneAPI client init (service=%s, auth_source=%s, ua=%s)",
+        service,
+        "delegated" if delegated is not None else "server",
+        custom_user_agent,
+    )
 
     config = {
         "clientId": client_id,

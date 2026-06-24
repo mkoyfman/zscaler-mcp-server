@@ -5,12 +5,12 @@ Provides read-only tools for listing and inspecting Zscaler Microsegmentation
 resource groups and their members.
 """
 
-import os
 from typing import Annotated, Any, Dict, List, Optional
 
 from pydantic import Field
 
 from zscaler_mcp.client import get_zscaler_client
+from zscaler_mcp.request_credentials import get_customer_id
 from zscaler_mcp.tools.zms import apply_jmespath_query
 
 
@@ -26,7 +26,9 @@ def _build_resource_groups_filter(
 
     return ResourceGroupsFilter(
         name=StringExpression(contains=name) if name else None,
-        resource_hostname=StringExpression(contains=resource_hostname) if resource_hostname else None,
+        resource_hostname=(
+            StringExpression(contains=resource_hostname) if resource_hostname else None
+        ),
     )
 
 
@@ -49,7 +51,9 @@ def zms_list_resource_groups(
     ] = None,
     query: Annotated[
         Optional[str],
-        Field(description="JMESPath expression for client-side filtering/projection on the result. Example: \"nodes[?member_count>`10`]\"."),
+        Field(
+            description='JMESPath expression for client-side filtering/projection on the result. Example: "nodes[?member_count>`10`]".'
+        ),
     ] = None,
     service: Annotated[
         Optional[str],
@@ -73,9 +77,11 @@ def zms_list_resource_groups(
     - See group member counts
     - Use JMESPath queries for advanced filtering (e.g., nodes[?member_count>`10`])
     """
-    customer_id = os.environ.get("ZSCALER_CUSTOMER_ID", "")
+    customer_id = get_customer_id()
     if not customer_id:
-        return [{"error": "ZSCALER_CUSTOMER_ID environment variable is required for ZMS tools."}]
+        return [
+            {"error": "ZSCALER_CUSTOMER_ID or X-Zscaler-Customer-ID is required for ZMS tools."}
+        ]
 
     client = get_zscaler_client(service="zms")
 
@@ -127,9 +133,11 @@ def zms_get_resource_group_members(
     - Inspect the cloud distribution of a resource group
     - Verify expected workloads are grouped correctly
     """
-    customer_id = os.environ.get("ZSCALER_CUSTOMER_ID", "")
+    customer_id = get_customer_id()
     if not customer_id:
-        return [{"error": "ZSCALER_CUSTOMER_ID environment variable is required for ZMS tools."}]
+        return [
+            {"error": "ZSCALER_CUSTOMER_ID or X-Zscaler-Customer-ID is required for ZMS tools."}
+        ]
 
     client = get_zscaler_client(service="zms")
 
@@ -171,9 +179,11 @@ def zms_get_resource_group_protection_status(
     - Track which resource groups have microsegmentation policies applied
     - Identify unprotected groups that need attention
     """
-    customer_id = os.environ.get("ZSCALER_CUSTOMER_ID", "")
+    customer_id = get_customer_id()
     if not customer_id:
-        return [{"error": "ZSCALER_CUSTOMER_ID environment variable is required for ZMS tools."}]
+        return [
+            {"error": "ZSCALER_CUSTOMER_ID or X-Zscaler-Customer-ID is required for ZMS tools."}
+        ]
 
     client = get_zscaler_client(service="zms")
 

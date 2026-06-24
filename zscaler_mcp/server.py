@@ -645,7 +645,10 @@ class ZscalerMCPServer:
             "1",
             "yes",
         )
-        self.disable_entitlement_filter = bool(disable_entitlement_filter or env_optout)
+        delegated_auth = os.getenv("ZSCALER_MCP_AUTH_MODE", "").strip().lower() == "zscaler"
+        self.disable_entitlement_filter = bool(
+            disable_entitlement_filter or env_optout or delegated_auth
+        )
         # Track the filter outcome for the security posture banner. One of:
         #   "disabled"           — operator opted out (CLI flag / env var)
         #   "applied"            — filter ran and trimmed (or confirmed) the set
@@ -658,10 +661,16 @@ class ZscalerMCPServer:
         self.entitled_services: Optional[List[str]] = None
 
         if self.disable_entitlement_filter:
-            logger.info(
-                "OneAPI entitlement filter disabled by configuration; "
-                "all selected toolsets will load."
-            )
+            if delegated_auth:
+                logger.info(
+                    "OneAPI entitlement filter disabled for delegated Zscaler auth; "
+                    "tenant entitlements can differ per request."
+                )
+            else:
+                logger.info(
+                    "OneAPI entitlement filter disabled by configuration; "
+                    "all selected toolsets will load."
+                )
         else:
             try:
                 from zscaler_mcp.common.entitlements import apply_entitlement_filter

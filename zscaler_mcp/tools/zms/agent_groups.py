@@ -4,12 +4,12 @@ ZMS Agent Groups Tools
 Provides read-only tools for listing and inspecting Zscaler Microsegmentation agent groups.
 """
 
-import os
 from typing import Annotated, Any, Dict, List, Optional
 
 from pydantic import Field
 
 from zscaler_mcp.client import get_zscaler_client
+from zscaler_mcp.request_credentials import get_customer_id
 from zscaler_mcp.tools.zms import apply_jmespath_query
 
 
@@ -36,7 +36,9 @@ def zms_list_agent_groups(
     ] = None,
     query: Annotated[
         Optional[str],
-        Field(description="JMESPath expression for client-side filtering/projection on the result. Example: \"nodes[?agent_group_type=='LINUX']\"."),
+        Field(
+            description="JMESPath expression for client-side filtering/projection on the result. Example: \"nodes[?agent_group_type=='LINUX']\"."
+        ),
     ] = None,
     service: Annotated[
         Optional[str],
@@ -56,9 +58,11 @@ def zms_list_agent_groups(
     - Monitor policy and tamper protection status per group
     - Use JMESPath queries for advanced filtering (e.g., nodes[?agent_group_type=='LINUX'])
     """
-    customer_id = os.environ.get("ZSCALER_CUSTOMER_ID", "")
+    customer_id = get_customer_id()
     if not customer_id:
-        return [{"error": "ZSCALER_CUSTOMER_ID environment variable is required for ZMS tools."}]
+        return [
+            {"error": "ZSCALER_CUSTOMER_ID or X-Zscaler-Customer-ID is required for ZMS tools."}
+        ]
 
     client = get_zscaler_client(service="zms")
 
@@ -102,9 +106,11 @@ def zms_get_agent_group_totp_secrets(
     - Retrieve TOTP provisioning secrets for agent enrollment
     - Get QR codes for agent group registration
     """
-    customer_id = os.environ.get("ZSCALER_CUSTOMER_ID", "")
+    customer_id = get_customer_id()
     if not customer_id:
-        return [{"error": "ZSCALER_CUSTOMER_ID environment variable is required for ZMS tools."}]
+        return [
+            {"error": "ZSCALER_CUSTOMER_ID or X-Zscaler-Customer-ID is required for ZMS tools."}
+        ]
 
     client = get_zscaler_client(service="zms")
 

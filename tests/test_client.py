@@ -19,6 +19,11 @@ import unittest
 from unittest.mock import MagicMock, patch
 
 from zscaler_mcp.client import get_zscaler_client
+from zscaler_mcp.request_credentials import (
+    DelegatedZscalerCredentials,
+    reset_delegated_credentials,
+    set_delegated_credentials,
+)
 
 
 @patch("zscaler_mcp.client.load_dotenv")
@@ -244,6 +249,62 @@ class TestEnvVarFallbacks(unittest.TestCase):
         get_zscaler_client()
         config = mock_client_cls.call_args[0][0]
         self.assertEqual(config["privateKey"], "env_pk")
+
+
+@patch("zscaler_mcp.client.load_dotenv")
+class TestDelegatedCredentials(unittest.TestCase):
+    @patch("zscaler_mcp.client.ZscalerClient")
+    @patch.dict(
+        os.environ,
+        {
+            "ZSCALER_CLIENT_ID": "server-id",
+            "ZSCALER_CLIENT_SECRET": "server-secret",
+            "ZSCALER_PRIVATE_KEY": "server-private-key",
+            "ZSCALER_VANITY_DOMAIN": "server-tenant",
+            "ZSCALER_CUSTOMER_ID": "server-customer",
+        },
+        clear=True,
+    )
+    def test_delegated_values_replace_server_credentials(self, mock_client_cls, _dotenv):
+        credentials = DelegatedZscalerCredentials(
+            client_id="request-id",
+            client_secret="request-secret",
+            vanity_domain="request-tenant",
+            customer_id="request-customer",
+            cloud="beta",
+        )
+        token = set_delegated_credentials(credentials)
+        try:
+            get_zscaler_client(service="zpa")
+        finally:
+            reset_delegated_credentials(token)
+
+        config = mock_client_cls.call_args[0][0]
+        self.assertEqual(config["clientId"], "request-id")
+        self.assertEqual(config["clientSecret"], "request-secret")
+        self.assertEqual(config["vanityDomain"], "request-tenant")
+        self.assertEqual(config["customerId"], "request-customer")
+        self.assertNotIn("privateKey", config)
+
+    @patch.dict(
+        os.environ,
+        {"ZSCALER_CUSTOMER_ID": "server-customer"},
+        clear=True,
+    )
+    def test_missing_delegated_customer_does_not_use_server_customer(self, _dotenv):
+        credentials = DelegatedZscalerCredentials(
+            client_id="request-id",
+            client_secret="request-secret",
+            vanity_domain="request-tenant",
+        )
+        token = set_delegated_credentials(credentials)
+        try:
+            with self.assertRaises(RuntimeError) as ctx:
+                get_zscaler_client(service="zpa")
+        finally:
+            reset_delegated_credentials(token)
+
+        self.assertIn("ZSCALER_CUSTOMER_ID", str(ctx.exception))
 
 
 if __name__ == "__main__":

@@ -4,12 +4,12 @@ ZMS App Zones Tools
 Provides read-only tools for listing Zscaler Microsegmentation app zones.
 """
 
-import os
 from typing import Annotated, Any, Dict, List, Optional
 
 from pydantic import Field
 
 from zscaler_mcp.client import get_zscaler_client
+from zscaler_mcp.request_credentials import get_customer_id
 from zscaler_mcp.tools.zms import apply_jmespath_query
 
 
@@ -50,7 +50,9 @@ def zms_list_app_zones(
     ] = None,
     query: Annotated[
         Optional[str],
-        Field(description="JMESPath expression for client-side filtering/projection on the result. Example: \"nodes[?member_count>`0`].{name: app_zone_name}\"."),
+        Field(
+            description='JMESPath expression for client-side filtering/projection on the result. Example: "nodes[?member_count>`0`].{name: app_zone_name}".'
+        ),
     ] = None,
     service: Annotated[
         Optional[str],
@@ -71,9 +73,11 @@ def zms_list_app_zones(
     - Check member counts and inclusion settings per zone
     - Use JMESPath queries for advanced filtering (e.g., nodes[?member_count>`0`])
     """
-    customer_id = os.environ.get("ZSCALER_CUSTOMER_ID", "")
+    customer_id = get_customer_id()
     if not customer_id:
-        return [{"error": "ZSCALER_CUSTOMER_ID environment variable is required for ZMS tools."}]
+        return [
+            {"error": "ZSCALER_CUSTOMER_ID or X-Zscaler-Customer-ID is required for ZMS tools."}
+        ]
 
     client = get_zscaler_client(service="zms")
 

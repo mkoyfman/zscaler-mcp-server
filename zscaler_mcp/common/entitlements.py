@@ -39,7 +39,6 @@ from __future__ import annotations
 import base64
 import json
 import logging
-import os
 from typing import Any, Iterable, Optional, Set, Tuple
 
 from zscaler_mcp.common.toolsets import (
@@ -47,6 +46,7 @@ from zscaler_mcp.common.toolsets import (
     TOOLSETS,
     ToolsetCatalog,
 )
+from zscaler_mcp.request_credentials import get_delegated_credentials, resolve_zscaler_value
 
 __all__ = [
     "PRD_TO_SERVICE",
@@ -176,10 +176,15 @@ def obtain_oneapi_token(
     failure. The caller decides whether the failure is fatal (it isn't,
     for the entitlement filter).
     """
-    client_id = client_id or os.getenv("ZSCALER_CLIENT_ID", "").strip() or None
-    client_secret = client_secret or os.getenv("ZSCALER_CLIENT_SECRET", "").strip() or None
-    vanity_domain = vanity_domain or os.getenv("ZSCALER_VANITY_DOMAIN", "").strip() or None
-    cloud = cloud or os.getenv("ZSCALER_CLOUD", "production").strip() or "production"
+    delegated = get_delegated_credentials()
+    client_id = resolve_zscaler_value("client_id", "ZSCALER_CLIENT_ID", explicit=client_id)
+    client_secret = resolve_zscaler_value(
+        "client_secret", "ZSCALER_CLIENT_SECRET", explicit=client_secret
+    )
+    vanity_domain = resolve_zscaler_value(
+        "vanity_domain", "ZSCALER_VANITY_DOMAIN", explicit=vanity_domain
+    )
+    cloud = resolve_zscaler_value("cloud", "ZSCALER_CLOUD", explicit=cloud, default="production")
 
     if not client_id or not client_secret or not vanity_domain:
         return None, "Missing OneAPI credentials (client_id / client_secret / vanity_domain)"
@@ -189,9 +194,17 @@ def obtain_oneapi_token(
         from zscaler_mcp.auth import get_registered_zscaler_providers
 
         for provider in get_registered_zscaler_providers():
-            cached = provider.get_cached_token(client_id, client_secret)
+            cached = provider.get_cached_token(
+                client_id,
+                client_secret,
+                vanity_domain=vanity_domain,
+                cloud=cloud,
+            )
             if cached:
-                logger.debug("Entitlement filter using cached OneAPI token from auth provider.")
+                logger.debug(
+                    "%s entitlement lookup using cached OneAPI token from auth provider.",
+                    "Delegated" if delegated is not None else "Server",
+                )
                 return cached, None
     except Exception as exc:  # pragma: no cover - defensive
         logger.debug("Entitlement filter cache lookup raised %s", exc)

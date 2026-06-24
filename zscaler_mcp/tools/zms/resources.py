@@ -5,12 +5,12 @@ Provides read-only tools for listing and inspecting Zscaler Microsegmentation re
 (workloads, servers, VMs, containers).
 """
 
-import os
 from typing import Annotated, Any, Dict, List, Optional
 
 from pydantic import Field
 
 from zscaler_mcp.client import get_zscaler_client
+from zscaler_mcp.request_credentials import get_customer_id
 from zscaler_mcp.tools.zms import apply_jmespath_query
 
 
@@ -72,11 +72,15 @@ def zms_list_resources(
     ] = None,
     resource_type: Annotated[
         Optional[str],
-        Field(description="Filter by resource type, e.g. 'VIRTUAL_MACHINE', 'CONTAINER', 'BARE_METAL' (exact match)."),
+        Field(
+            description="Filter by resource type, e.g. 'VIRTUAL_MACHINE', 'CONTAINER', 'BARE_METAL' (exact match)."
+        ),
     ] = None,
     cloud_provider: Annotated[
         Optional[str],
-        Field(description="Filter by cloud provider, e.g. 'AWS', 'AZURE', 'GCP', 'ON_PREMISES' (exact match)."),
+        Field(
+            description="Filter by cloud provider, e.g. 'AWS', 'AZURE', 'GCP', 'ON_PREMISES' (exact match)."
+        ),
     ] = None,
     cloud_region: Annotated[
         Optional[str],
@@ -92,7 +96,9 @@ def zms_list_resources(
     ] = None,
     query: Annotated[
         Optional[str],
-        Field(description="JMESPath expression for client-side filtering/projection on the result. Example: \"nodes[?cloud_provider=='AWS']\"."),
+        Field(
+            description="JMESPath expression for client-side filtering/projection on the result. Example: \"nodes[?cloud_provider=='AWS']\"."
+        ),
     ] = None,
     service: Annotated[
         Optional[str],
@@ -115,9 +121,11 @@ def zms_list_resources(
     - See which app zones resources are mapped to
     - Use JMESPath queries for advanced filtering (e.g., nodes[?cloud_provider=='AWS'])
     """
-    customer_id = os.environ.get("ZSCALER_CUSTOMER_ID", "")
+    customer_id = get_customer_id()
     if not customer_id:
-        return [{"error": "ZSCALER_CUSTOMER_ID environment variable is required for ZMS tools."}]
+        return [
+            {"error": "ZSCALER_CUSTOMER_ID or X-Zscaler-Customer-ID is required for ZMS tools."}
+        ]
 
     client = get_zscaler_client(service="zms")
 
@@ -128,7 +136,9 @@ def zms_list_resources(
         "include_deleted": include_deleted,
     }
 
-    filter_by = _build_resource_filter(name, status, resource_type, cloud_provider, cloud_region, platform_os)
+    filter_by = _build_resource_filter(
+        name, status, resource_type, cloud_provider, cloud_region, platform_os
+    )
     if filter_by:
         kwargs["filter_by"] = filter_by
 
@@ -169,9 +179,11 @@ def zms_get_resource_protection_status(
     - Track what percentage of workloads are protected
     - Identify unprotected resources that need attention
     """
-    customer_id = os.environ.get("ZSCALER_CUSTOMER_ID", "")
+    customer_id = get_customer_id()
     if not customer_id:
-        return [{"error": "ZSCALER_CUSTOMER_ID environment variable is required for ZMS tools."}]
+        return [
+            {"error": "ZSCALER_CUSTOMER_ID or X-Zscaler-Customer-ID is required for ZMS tools."}
+        ]
 
     client = get_zscaler_client(service="zms")
 
@@ -203,9 +215,11 @@ def zms_get_metadata(
     - Retrieve metadata about resource-level events
     - Understand what event types are available in your ZMS deployment
     """
-    customer_id = os.environ.get("ZSCALER_CUSTOMER_ID", "")
+    customer_id = get_customer_id()
     if not customer_id:
-        return [{"error": "ZSCALER_CUSTOMER_ID environment variable is required for ZMS tools."}]
+        return [
+            {"error": "ZSCALER_CUSTOMER_ID or X-Zscaler-Customer-ID is required for ZMS tools."}
+        ]
 
     client = get_zscaler_client(service="zms")
 

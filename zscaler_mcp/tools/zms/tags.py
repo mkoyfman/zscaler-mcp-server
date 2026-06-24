@@ -5,12 +5,12 @@ Provides read-only tools for listing Zscaler Microsegmentation tag namespaces,
 tag keys, and tag values.
 """
 
-import os
 from typing import Annotated, Any, Dict, List, Optional
 
 from pydantic import Field
 
 from zscaler_mcp.client import get_zscaler_client
+from zscaler_mcp.request_credentials import get_customer_id
 from zscaler_mcp.tools.zms import apply_jmespath_query
 
 
@@ -38,7 +38,9 @@ def zms_list_tag_namespaces(
     ] = None,
     origin: Annotated[
         Optional[str],
-        Field(description="Filter by namespace origin: 'CUSTOM', 'EXTERNAL', 'ML', or 'UNKNOWN' (exact match)."),
+        Field(
+            description="Filter by namespace origin: 'CUSTOM', 'EXTERNAL', 'ML', or 'UNKNOWN' (exact match)."
+        ),
     ] = None,
     sort_order: Annotated[
         Optional[str],
@@ -46,7 +48,9 @@ def zms_list_tag_namespaces(
     ] = None,
     query: Annotated[
         Optional[str],
-        Field(description="JMESPath expression for client-side filtering/projection on the result. Example: \"nodes[?origin=='CUSTOM']\"."),
+        Field(
+            description="JMESPath expression for client-side filtering/projection on the result. Example: \"nodes[?origin=='CUSTOM']\"."
+        ),
     ] = None,
     service: Annotated[
         Optional[str],
@@ -68,9 +72,11 @@ def zms_list_tag_namespaces(
     - Navigate the tag hierarchy (namespaces -> keys -> values)
     - Use JMESPath queries for advanced filtering (e.g., nodes[?origin=='CUSTOM'])
     """
-    customer_id = os.environ.get("ZSCALER_CUSTOMER_ID", "")
+    customer_id = get_customer_id()
     if not customer_id:
-        return [{"error": "ZSCALER_CUSTOMER_ID environment variable is required for ZMS tools."}]
+        return [
+            {"error": "ZSCALER_CUSTOMER_ID or X-Zscaler-Customer-ID is required for ZMS tools."}
+        ]
 
     client = get_zscaler_client(service="zms")
 
@@ -126,7 +132,9 @@ def zms_list_tag_keys(
     ] = None,
     query: Annotated[
         Optional[str],
-        Field(description="JMESPath expression for client-side filtering/projection on the result. Example: \"nodes[*].key_name\"."),
+        Field(
+            description='JMESPath expression for client-side filtering/projection on the result. Example: "nodes[*].key_name".'
+        ),
     ] = None,
     service: Annotated[
         Optional[str],
@@ -146,9 +154,11 @@ def zms_list_tag_keys(
     - Navigate the tag hierarchy (namespaces -> keys -> values)
     - Use JMESPath queries for advanced filtering (e.g., nodes[*].key_name)
     """
-    customer_id = os.environ.get("ZSCALER_CUSTOMER_ID", "")
+    customer_id = get_customer_id()
     if not customer_id:
-        return [{"error": "ZSCALER_CUSTOMER_ID environment variable is required for ZMS tools."}]
+        return [
+            {"error": "ZSCALER_CUSTOMER_ID or X-Zscaler-Customer-ID is required for ZMS tools."}
+        ]
 
     client = get_zscaler_client(service="zms")
 
@@ -208,7 +218,9 @@ def zms_list_tag_values(
     ] = None,
     query: Annotated[
         Optional[str],
-        Field(description="JMESPath expression for client-side filtering/projection on the result. Example: \"nodes[*].name\"."),
+        Field(
+            description='JMESPath expression for client-side filtering/projection on the result. Example: "nodes[*].name".'
+        ),
     ] = None,
     service: Annotated[
         Optional[str],
@@ -228,9 +240,11 @@ def zms_list_tag_values(
     - Navigate the tag hierarchy (namespaces -> keys -> values)
     - Use JMESPath queries for advanced filtering (e.g., nodes[*].name)
     """
-    customer_id = os.environ.get("ZSCALER_CUSTOMER_ID", "")
+    customer_id = get_customer_id()
     if not customer_id:
-        return [{"error": "ZSCALER_CUSTOMER_ID environment variable is required for ZMS tools."}]
+        return [
+            {"error": "ZSCALER_CUSTOMER_ID or X-Zscaler-Customer-ID is required for ZMS tools."}
+        ]
 
     client = get_zscaler_client(service="zms")
 

@@ -4,12 +4,12 @@ ZMS Agents Tools
 Provides read-only tools for listing and inspecting Zscaler Microsegmentation agents.
 """
 
-import os
 from typing import Annotated, Any, Dict, List, Optional
 
 from pydantic import Field
 
 from zscaler_mcp.client import get_zscaler_client
+from zscaler_mcp.request_credentials import get_customer_id
 from zscaler_mcp.tools.zms import apply_jmespath_query
 
 
@@ -36,7 +36,9 @@ def zms_list_agents(
     ] = None,
     query: Annotated[
         Optional[str],
-        Field(description="JMESPath expression for client-side filtering/projection on the result. Example: \"nodes[?connection_status=='CONNECTED']\"."),
+        Field(
+            description="JMESPath expression for client-side filtering/projection on the result. Example: \"nodes[?connection_status=='CONNECTED']\"."
+        ),
     ] = None,
     service: Annotated[
         Optional[str],
@@ -56,9 +58,11 @@ def zms_list_agents(
     - Monitor agent software versions
     - Use JMESPath queries for advanced filtering (e.g., nodes[?connection_status=='CONNECTED'])
     """
-    customer_id = os.environ.get("ZSCALER_CUSTOMER_ID", "")
+    customer_id = get_customer_id()
     if not customer_id:
-        return [{"error": "ZSCALER_CUSTOMER_ID environment variable is required for ZMS tools."}]
+        return [
+            {"error": "ZSCALER_CUSTOMER_ID or X-Zscaler-Customer-ID is required for ZMS tools."}
+        ]
 
     client = get_zscaler_client(service="zms")
 
@@ -102,9 +106,11 @@ def zms_get_agent_connection_status_statistics(
     - Get an overview of how many agents are connected vs disconnected
     - Monitor agent fleet health
     """
-    customer_id = os.environ.get("ZSCALER_CUSTOMER_ID", "")
+    customer_id = get_customer_id()
     if not customer_id:
-        return [{"error": "ZSCALER_CUSTOMER_ID environment variable is required for ZMS tools."}]
+        return [
+            {"error": "ZSCALER_CUSTOMER_ID or X-Zscaler-Customer-ID is required for ZMS tools."}
+        ]
 
     client = get_zscaler_client(service="zms")
 
@@ -141,9 +147,11 @@ def zms_get_agent_version_statistics(
     - Track upgrade rollout progress
     - Verify version consistency across the fleet
     """
-    customer_id = os.environ.get("ZSCALER_CUSTOMER_ID", "")
+    customer_id = get_customer_id()
     if not customer_id:
-        return [{"error": "ZSCALER_CUSTOMER_ID environment variable is required for ZMS tools."}]
+        return [
+            {"error": "ZSCALER_CUSTOMER_ID or X-Zscaler-Customer-ID is required for ZMS tools."}
+        ]
 
     client = get_zscaler_client(service="zms")
 

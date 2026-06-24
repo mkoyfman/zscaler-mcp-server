@@ -15,6 +15,11 @@ from zscaler_mcp.common.entitlements import (
     obtain_oneapi_token,
 )
 from zscaler_mcp.common.toolsets import META_TOOLSET_ID, TOOLSETS
+from zscaler_mcp.request_credentials import (
+    DelegatedZscalerCredentials,
+    reset_delegated_credentials,
+    set_delegated_credentials,
+)
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -233,6 +238,42 @@ class TestObtainOneapiToken:
         assert error is None
         assert token == "freshly-minted"
 
+    def test_uses_delegated_credentials_for_cold_fetch(self, monkeypatch):
+        from zscaler_mcp import auth as auth_mod
+
+        with auth_mod._zscaler_providers_lock:
+            auth_mod._zscaler_providers.clear()
+
+        calls = []
+
+        def fake_fetch(**kwargs):
+            calls.append(kwargs)
+            return "delegated-token", None
+
+        monkeypatch.setattr(auth_mod, "fetch_oneapi_token", fake_fetch)
+        credentials = DelegatedZscalerCredentials(
+            client_id="request-id",
+            client_secret="request-secret",
+            vanity_domain="request-tenant",
+            cloud="beta",
+        )
+        context_token = set_delegated_credentials(credentials)
+        try:
+            token, error = obtain_oneapi_token()
+        finally:
+            reset_delegated_credentials(context_token)
+
+        assert error is None
+        assert token == "delegated-token"
+        assert calls == [
+            {
+                "client_id": "request-id",
+                "client_secret": "request-secret",
+                "vanity_domain": "request-tenant",
+                "cloud": "beta",
+            }
+        ]
+
     def test_returns_error_when_creds_missing(self, monkeypatch):
         monkeypatch.delenv("ZSCALER_CLIENT_ID", raising=False)
         token, error = obtain_oneapi_token()
@@ -246,6 +287,23 @@ class TestObtainOneapiToken:
 
 
 class TestServerIntegration:
+    def test_delegated_auth_skips_process_wide_entitlement_filter(self, monkeypatch):
+        from zscaler_mcp.server import ZscalerMCPServer
+
+        monkeypatch.setenv("ZSCALER_MCP_AUTH_MODE", "zscaler")
+        called = {"n": 0}
+
+        def _spy(*args, **kwargs):
+            called["n"] += 1
+            return None, None
+
+        monkeypatch.setattr("zscaler_mcp.common.entitlements.apply_entitlement_filter", _spy)
+
+        server = ZscalerMCPServer()
+
+        assert server.disable_entitlement_filter is True
+        assert called["n"] == 0
+
     def test_opt_out_flag_skips_filter(self, monkeypatch):
         from zscaler_mcp.server import ZscalerMCPServer
 

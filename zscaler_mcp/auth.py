@@ -35,6 +35,11 @@ from abc import ABC, abstractmethod
 from typing import Any, Dict, Optional, Tuple
 
 from zscaler_mcp.common.logging import log_security_warning
+from zscaler_mcp.request_credentials import (
+    DelegatedZscalerCredentials,
+    reset_delegated_credentials,
+    set_delegated_credentials,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -356,11 +361,15 @@ class ZscalerAuthProvider(AuthProvider):
 
     Configuration:
         ZSCALER_MCP_AUTH_MODE=zscaler
-        ZSCALER_VANITY_DOMAIN=customer.zscloud.net
-        ZSCALER_CLOUD=production               (optional, default: production)
+        ZSCALER_VANITY_DOMAIN=customer         (optional request default)
+        ZSCALER_CUSTOMER_ID=123456             (optional request default)
+        ZSCALER_CLOUD=production               (optional request default)
 
     The MCP client sends:
         Authorization: Basic base64(client_id:client_secret)
+        X-Zscaler-Vanity-Domain: customer
+        X-Zscaler-Customer-ID: 123456          (required by ZPA and ZMS)
+        X-Zscaler-Cloud: production            (optional)
 
     The server decodes the credentials and validates them by calling
     Zscaler's /oauth2/v1/token endpoint. Successful validations are
@@ -377,15 +386,16 @@ class ZscalerAuthProvider(AuthProvider):
 
     def __init__(
         self,
-        vanity_domain: str,
+        vanity_domain: str = "",
         cloud: str = "production",
+        customer_id: str = "",
     ):
-        if not vanity_domain or not vanity_domain.strip():
-            raise ValueError("ZSCALER_VANITY_DOMAIN is required for Zscaler auth mode.")
-
-        self._vanity_domain = vanity_domain.strip()
+        self._vanity_domain = vanity_domain.strip() if vanity_domain else ""
         self._cloud = cloud.lower().strip() if cloud else "production"
-        self._token_url = self._build_token_url()
+        self._customer_id = customer_id.strip() if customer_id else ""
+        self._token_url = (
+            _build_token_url(self._vanity_domain, self._cloud) if self._vanity_domain else ""
+        )
 
         # Thread-safe cache: sha256(credentials) -> (valid_until_ts, access_token)
         self._cache: Dict[str, Tuple[float, str]] = {}
@@ -396,10 +406,9 @@ class ZscalerAuthProvider(AuthProvider):
         _register_zscaler_provider(self)
 
         logger.info(
-            "Zscaler OneAPI auth provider initialized (domain=%s, cloud=%s, token_url=%s)",
-            self._vanity_domain,
+            "Zscaler OneAPI auth provider initialized (default_domain=%s, " "default_cloud=%s)",
+            self._vanity_domain or "request-required",
             self._cloud,
-            self._token_url,
         )
 
     @property
@@ -412,7 +421,14 @@ class ZscalerAuthProvider(AuthProvider):
         """The configured cloud environment (read-only public accessor)."""
         return self._cloud
 
-    def get_cached_token(self, client_id: str, client_secret: str) -> Optional[str]:
+    def get_cached_token(
+        self,
+        client_id: str,
+        client_secret: str,
+        *,
+        vanity_domain: Optional[str] = None,
+        cloud: Optional[str] = None,
+    ) -> Optional[str]:
         """Return the cached bearer token for the given creds, or ``None``.
 
         Used by the entitlement filter to avoid a redundant ``/token`` call
@@ -422,7 +438,12 @@ class ZscalerAuthProvider(AuthProvider):
         Returns the token string if a non-expired entry exists, otherwise
         ``None`` (without removing the entry — read-only).
         """
-        cred_hash = self._credential_hash(client_id, client_secret)
+        cred_hash = self._credential_hash(
+            client_id,
+            client_secret,
+            vanity_domain=vanity_domain,
+            cloud=cloud,
+        )
         with self._cache_lock:
             entry = self._cache.get(cred_hash)
             if entry is None:
@@ -437,13 +458,20 @@ class ZscalerAuthProvider(AuthProvider):
         return "Basic"
 
     def _build_token_url(self) -> str:
-        if self._cloud == "production":
-            return f"https://{self._vanity_domain}.zslogin.net/oauth2/v1/token"
-        return f"https://{self._vanity_domain}.zslogin{self._cloud}.net/oauth2/v1/token"
+        """Return the token URL for the configured default tenant."""
+        return _build_token_url(self._vanity_domain, self._cloud)
 
-    @staticmethod
-    def _credential_hash(client_id: str, client_secret: str) -> str:
-        raw = f"{client_id}:{client_secret}".encode("utf-8")
+    def _credential_hash(
+        self,
+        client_id: str,
+        client_secret: str,
+        *,
+        vanity_domain: Optional[str] = None,
+        cloud: Optional[str] = None,
+    ) -> str:
+        domain = vanity_domain or self._vanity_domain
+        resolved_cloud = (cloud or self._cloud).lower().strip()
+        raw = f"{client_id}:{client_secret}:{domain}:{resolved_cloud}".encode("utf-8")
         return hashlib.sha256(raw).hexdigest()
 
     def _check_cache(self, cred_hash: str) -> Optional[bool]:
@@ -458,7 +486,11 @@ class ZscalerAuthProvider(AuthProvider):
             return None
 
     def _validate_against_zscaler(
-        self, client_id: str, client_secret: str
+        self,
+        client_id: str,
+        client_secret: str,
+        vanity_domain: str,
+        cloud: str,
     ) -> Tuple[bool, Optional[str]]:
         """Call Zscaler's /oauth2/v1/token to validate credentials.
 
@@ -469,8 +501,8 @@ class ZscalerAuthProvider(AuthProvider):
         access_token, error = fetch_oneapi_token(
             client_id=client_id,
             client_secret=client_secret,
-            vanity_domain=self._vanity_domain,
-            cloud=self._cloud,
+            vanity_domain=vanity_domain,
+            cloud=cloud,
         )
         if error or not access_token:
             return False, error or "Authentication failed"
@@ -479,7 +511,12 @@ class ZscalerAuthProvider(AuthProvider):
         # surface minimal). Use the conservative default of 1 hour minus
         # the buffer — the next MCP request will simply re-validate if
         # the real TTL was shorter.
-        cred_hash = self._credential_hash(client_id, client_secret)
+        cred_hash = self._credential_hash(
+            client_id,
+            client_secret,
+            vanity_domain=vanity_domain,
+            cloud=cloud,
+        )
         valid_until = time.time() + 3600 - self.CACHE_EXPIRY_BUFFER_SECONDS
 
         with self._cache_lock:
@@ -491,25 +528,32 @@ class ZscalerAuthProvider(AuthProvider):
         )
         return True, None
 
+    @staticmethod
+    def _headers_to_dict(headers_list: list) -> Dict[str, str]:
+        """Normalize an ASGI header list without retaining duplicate values."""
+        normalized: Dict[str, str] = {}
+        for key, value in headers_list:
+            key_text = key.decode("latin-1") if isinstance(key, bytes) else str(key)
+            value_text = value.decode("utf-8") if isinstance(value, bytes) else str(value)
+            normalized[key_text.lower()] = value_text.strip()
+        return normalized
+
     def _extract_credentials_from_headers(self, headers_list: list) -> Optional[Tuple[str, str]]:
         """Extract credentials from X-Zscaler-Client-ID / X-Zscaler-Client-Secret headers."""
-        client_id = ""
-        client_secret = ""
-        for key, value in headers_list:
-            lower_key = key.lower() if isinstance(key, str) else key
-            if lower_key == b"x-zscaler-client-id":
-                client_id = value.decode("utf-8") if isinstance(value, bytes) else value
-            elif lower_key == b"x-zscaler-client-secret":
-                client_secret = value.decode("utf-8") if isinstance(value, bytes) else value
+        headers = self._headers_to_dict(headers_list)
+        client_id = headers.get("x-zscaler-client-id", "")
+        client_secret = headers.get("x-zscaler-client-secret", "")
         if client_id and client_secret:
             return client_id.strip(), client_secret.strip()
         return None
 
-    async def authenticate(
+    async def authenticate_with_credentials(
         self, authorization: str, headers_list: Optional[list] = None
-    ) -> Tuple[bool, Optional[str]]:
+    ) -> Tuple[bool, Optional[str], Optional[DelegatedZscalerCredentials]]:
+        """Validate a caller and return credentials safe to bind to its request."""
         client_id = None
         client_secret = None
+        headers = self._headers_to_dict(headers_list or [])
 
         # Method 1: X-Zscaler-Client-ID + X-Zscaler-Client-Secret headers (no encoding needed)
         if headers_list:
@@ -522,25 +566,88 @@ class ZscalerAuthProvider(AuthProvider):
             parts = authorization.split(" ", 1)
             if len(parts) == 2 and parts[0].lower() == "basic":
                 try:
-                    decoded = base64.b64decode(parts[1].strip()).decode("utf-8")
+                    decoded = base64.b64decode(
+                        parts[1].strip(),
+                        validate=True,
+                    ).decode("utf-8")
                     if ":" in decoded:
                         client_id, client_secret = decoded.split(":", 1)
                 except Exception:
-                    return False, "Invalid Base64 encoding in Basic auth header"
+                    return False, "Invalid Base64 encoding in Basic auth header", None
 
         if not client_id or not client_secret:
-            return False, (
-                "Zscaler auth mode requires credentials. Use either:\n"
-                "  1. Headers: X-Zscaler-Client-ID + X-Zscaler-Client-Secret\n"
-                "  2. Header: Authorization: Basic base64(client_id:client_secret)"
+            return (
+                False,
+                (
+                    "Zscaler auth mode requires credentials. Use either:\n"
+                    "  1. Headers: X-Zscaler-Client-ID + X-Zscaler-Client-Secret\n"
+                    "  2. Header: Authorization: Basic base64(client_id:client_secret)"
+                ),
+                None,
             )
 
-        cred_hash = self._credential_hash(client_id, client_secret)
+        requested_domain = headers.get("x-zscaler-vanity-domain", "")
+        vanity_domain = requested_domain or self._vanity_domain
+        cloud = headers.get("x-zscaler-cloud", "") or self._cloud
+
+        # A configured customer ID is a safe default only for the configured
+        # tenant. A caller selecting another tenant must provide its customer ID.
+        customer_id = headers.get("x-zscaler-customer-id", "") or None
+        if (
+            customer_id is None
+            and self._customer_id
+            and (not requested_domain or requested_domain == self._vanity_domain)
+        ):
+            customer_id = self._customer_id
+
+        if not vanity_domain:
+            return (
+                False,
+                (
+                    "Missing Zscaler vanity domain. Send X-Zscaler-Vanity-Domain "
+                    "or configure ZSCALER_VANITY_DOMAIN on the server."
+                ),
+                None,
+            )
+
+        try:
+            credentials = DelegatedZscalerCredentials(
+                client_id=client_id,
+                client_secret=client_secret,
+                vanity_domain=vanity_domain,
+                customer_id=customer_id,
+                cloud=cloud,
+            )
+        except ValueError as exc:
+            return False, f"Invalid Zscaler tenant routing: {exc}", None
+
+        cred_hash = self._credential_hash(
+            client_id,
+            client_secret,
+            vanity_domain=credentials.vanity_domain,
+            cloud=credentials.cloud,
+        )
         cached = self._check_cache(cred_hash)
         if cached is True:
-            return True, None
+            return True, None, credentials
 
-        return self._validate_against_zscaler(client_id, client_secret)
+        is_valid, error = self._validate_against_zscaler(
+            client_id,
+            client_secret,
+            credentials.vanity_domain,
+            credentials.cloud,
+        )
+        return is_valid, error, credentials if is_valid else None
+
+    async def authenticate(
+        self, authorization: str, headers_list: Optional[list] = None
+    ) -> Tuple[bool, Optional[str]]:
+        """Validate credentials while preserving the AuthProvider interface."""
+        is_valid, error, _ = await self.authenticate_with_credentials(
+            authorization,
+            headers_list,
+        )
+        return is_valid, error
 
 
 # ---------------------------------------------------------------------------
@@ -641,12 +748,20 @@ class AuthMiddleware:
         headers_list = scope.get("headers", [])
         auth_value = ""
         for key, value in headers_list:
-            if key == b"authorization":
-                auth_value = value.decode("utf-8", errors="replace")
+            key_text = key.decode("latin-1") if isinstance(key, bytes) else str(key)
+            if key_text.lower() == "authorization":
+                auth_value = (
+                    value.decode("utf-8", errors="replace")
+                    if isinstance(value, bytes)
+                    else str(value)
+                )
                 break
 
+        delegated_credentials = None
         if isinstance(self.provider, ZscalerAuthProvider):
-            is_valid, error = await self.provider.authenticate(auth_value, headers_list)
+            is_valid, error, delegated_credentials = (
+                await self.provider.authenticate_with_credentials(auth_value, headers_list)
+            )
         else:
             is_valid, error = await self.provider.authenticate(auth_value)
 
@@ -668,7 +783,15 @@ class AuthMiddleware:
             await response(scope, receive, send)
             return
 
-        await self.app(scope, receive, send)
+        if delegated_credentials is None:
+            await self.app(scope, receive, send)
+            return
+
+        token = set_delegated_credentials(delegated_credentials)
+        try:
+            await self.app(scope, receive, send)
+        finally:
+            reset_delegated_credentials(token)
 
 
 # ---------------------------------------------------------------------------
@@ -686,7 +809,7 @@ def _read_auth_config() -> Optional[Dict[str, str]]:
     auto-detects the best available mode:
         1. ZSCALER_MCP_AUTH_JWKS_URI set  -> jwt mode
         2. ZSCALER_MCP_AUTH_API_KEY set   -> api-key mode
-        3. ZSCALER_VANITY_DOMAIN set      -> zscaler mode (Layer 2 creds as Layer 1)
+        3. ZSCALER_VANITY_DOMAIN set      -> zscaler mode (delegated Layer 2 creds)
         4. None of the above              -> returns config with mode for caller to handle
 
     Returns None only if auth is explicitly disabled.
@@ -731,8 +854,9 @@ def _read_auth_config() -> Optional[Dict[str, str]]:
         "algorithms": os.getenv("ZSCALER_MCP_AUTH_ALGORITHMS", "RS256,ES256"),
         # API key mode
         "api_key": os.getenv("ZSCALER_MCP_AUTH_API_KEY", ""),
-        # Zscaler mode (reuses existing ZSCALER_VANITY_DOMAIN / ZSCALER_CLOUD)
+        # Zscaler mode defaults. Request headers can select another tenant.
         "vanity_domain": os.getenv("ZSCALER_VANITY_DOMAIN", ""),
+        "customer_id": os.getenv("ZSCALER_CUSTOMER_ID", ""),
         "cloud": os.getenv("ZSCALER_CLOUD", "production"),
         # OAuth proxy mode (Phase 2)
         "authorization_url": os.getenv("ZSCALER_MCP_AUTH_AUTHORIZATION_URL", ""),
@@ -767,6 +891,7 @@ def _create_provider(config: Dict[str, str]) -> AuthProvider:
         return ZscalerAuthProvider(
             vanity_domain=config["vanity_domain"],
             cloud=config["cloud"],
+            customer_id=config["customer_id"],
         )
 
     elif mode == "oauth-proxy":
@@ -925,18 +1050,22 @@ class HealthCheckMiddleware:
             and scope.get("method") in ("GET", "HEAD")
             and scope.get("path") == self._path
         ):
-            await send({
-                "type": "http.response.start",
-                "status": 200,
-                "headers": [
-                    (b"content-type", b"application/json"),
-                    (b"cache-control", b"no-store"),
-                ],
-            })
-            await send({
-                "type": "http.response.body",
-                "body": b'{"status":"ok"}' if scope["method"] == "GET" else b"",
-            })
+            await send(
+                {
+                    "type": "http.response.start",
+                    "status": 200,
+                    "headers": [
+                        (b"content-type", b"application/json"),
+                        (b"cache-control", b"no-store"),
+                    ],
+                }
+            )
+            await send(
+                {
+                    "type": "http.response.body",
+                    "body": b'{"status":"ok"}' if scope["method"] == "GET" else b"",
+                }
+            )
             return
         await self.app(scope, receive, send)
 
@@ -988,22 +1117,26 @@ class RejectNonSSEGetMiddleware:
             except UnicodeDecodeError:
                 accept_str = ""
             if "text/event-stream" not in accept_str:
-                await send({
-                    "type": "http.response.start",
-                    "status": 405,
-                    "headers": [
-                        (b"content-type", b"text/plain; charset=utf-8"),
-                        (b"allow", b"POST"),
-                    ],
-                })
-                await send({
-                    "type": "http.response.body",
-                    "body": (
-                        b"Method Not Allowed: this endpoint is POST-only. "
-                        b"To receive server-initiated messages over SSE, "
-                        b"reissue the GET with Accept: text/event-stream."
-                    ),
-                })
+                await send(
+                    {
+                        "type": "http.response.start",
+                        "status": 405,
+                        "headers": [
+                            (b"content-type", b"text/plain; charset=utf-8"),
+                            (b"allow", b"POST"),
+                        ],
+                    }
+                )
+                await send(
+                    {
+                        "type": "http.response.body",
+                        "body": (
+                            b"Method Not Allowed: this endpoint is POST-only. "
+                            b"To receive server-initiated messages over SSE, "
+                            b"reissue the GET with Accept: text/event-stream."
+                        ),
+                    }
+                )
                 return
         await self.app(scope, receive, send)
 
@@ -1041,7 +1174,7 @@ class NormalizeContentTypeMiddleware:
                             rewritten.append((name, value))
                             continue
                         if decoded.lower().startswith(self._JSON_RPC):
-                            rest = decoded[len(self._JSON_RPC):]
+                            rest = decoded[len(self._JSON_RPC) :]
                             new_value = f"application/json{rest}".encode("utf-8")
                             rewritten.append((name, new_value))
                             changed = True

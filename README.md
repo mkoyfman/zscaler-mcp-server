@@ -413,9 +413,12 @@ MCP Client Request
 ```
 
 - **Layer 1 (MCP Client Auth)**: Controlled by `ZSCALER_MCP_AUTH_*` variables — validates the incoming request
-- **Layer 2 (Zscaler API Auth)**: Controlled by `ZSCALER_CLIENT_ID`, `ZSCALER_CLIENT_SECRET`, etc. — authenticates the server to Zscaler APIs
+- **Layer 2 (Zscaler API Auth)**: Normally controlled by `ZSCALER_CLIENT_ID`, `ZSCALER_CLIENT_SECRET`, etc. — authenticates the server to Zscaler APIs
 
-These two layers are completely independent. You can enable one, both, or neither.
+The layers remain independent in `api-key`, `jwt`, and programmatic `auth=` modes. In
+`zscaler` mode, however, the validated Layer 1 OneAPI credentials and tenant-routing
+headers are deliberately delegated to Layer 2 for that request. This lets one server
+serve multiple Zscaler tenants without storing every tenant's API secret.
 
 ### Configuration by Mode
 
@@ -443,10 +446,36 @@ ZSCALER_MCP_AUTH_ALGORITHMS=RS256,ES256   # Optional (default: RS256,ES256)
 ```env
 ZSCALER_MCP_AUTH_ENABLED=true
 ZSCALER_MCP_AUTH_MODE=zscaler
-# Uses ZSCALER_VANITY_DOMAIN and ZSCALER_CLOUD from your existing config
+# Optional defaults for clients that omit the corresponding routing headers:
+# ZSCALER_VANITY_DOMAIN=your-default-tenant
+# ZSCALER_CUSTOMER_ID=your-default-customer-id
+# ZSCALER_CLOUD=production
 ```
 
-Clients authenticate with Basic Auth (`client_id:client_secret`) or custom headers (`X-Zscaler-Client-ID` / `X-Zscaler-Client-Secret`).
+Clients authenticate with Basic Auth (`client_id:client_secret`) and send tenant routing
+as headers:
+
+```text
+Authorization: Basic base64(client_id:client_secret)
+X-Zscaler-Vanity-Domain: tenant-label
+X-Zscaler-Customer-ID: customer-id       # required by ZPA and ZMS tools
+X-Zscaler-Cloud: production              # optional; production or beta
+```
+
+`X-Zscaler-Client-ID` and `X-Zscaler-Client-Secret` remain supported as an alternative
+to Basic Auth. `ZSCALER_VANITY_DOMAIN`, `ZSCALER_CUSTOMER_ID`, and `ZSCALER_CLOUD` are
+server-side defaults only. If a request selects a different vanity domain, it must also
+send its own customer ID for ZPA or ZMS; the server will not combine that request with
+the default tenant's customer ID.
+
+Credentials are stored in request-local context, never copied into process environment
+variables, and are cleared after the request. Clients must send the headers on every MCP
+HTTP request. Use HTTPS: Basic Auth encodes credentials but does not encrypt them.
+
+Server policy remains server-side. Clients cannot override tool selection, write-tool
+enablement, source-IP controls, or other `ZSCALER_MCP_*` settings. The process-wide
+entitlement filter is automatically disabled in `zscaler` auth mode because entitlements
+may differ between tenants.
 
 ### Authentication Defaults
 
