@@ -1,0 +1,43 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "zscaler-mcp-server",
+  "account_id": "65e621f54cc09d808b8ec8de3a04b63f",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-06-24",
+  "observability": {
+    "enabled": true
+  },
+  "vars": {
+    "CONTAINER_INSTANCE_NAME": "zscaler-mcp",
+    "ZSCALER_MCP_TRANSPORT": "streamable-http",
+    "ZSCALER_MCP_HOST": "0.0.0.0",
+    "ZSCALER_MCP_PORT": "8000",
+    "ZSCALER_MCP_ALLOW_HTTP": "true",
+    "ZSCALER_MCP_DISABLE_HOST_VALIDATION": "true",
+    "ZSCALER_MCP_AUTH_ENABLED": "true",
+    "ZSCALER_MCP_AUTH_MODE": "zscaler",
+    "ZSCALER_CLOUD": "production"
+  },
+  "containers": [
+    {
+      "class_name": "ZscalerMcpContainer",
+      "image": "./Dockerfile",
+      "instance_type": "basic",
+      "max_instances": 1
+    }
+  ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "ZSCALER_MCP_CONTAINER",
+        "class_name": "ZscalerMcpContainer"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["ZscalerMcpContainer"]
+    }
+  ]
+}

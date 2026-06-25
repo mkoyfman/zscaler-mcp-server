@@ -38,6 +38,11 @@ venv/
 ENV/
 env/
 
+# Node / Cloudflare local artifacts
+node_modules/
+.wrangler/
+worker-configuration.d.ts
+
 # IDE and editor files
 .vscode/
 .idea/
