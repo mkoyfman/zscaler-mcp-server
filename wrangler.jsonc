@@ -8,7 +8,7 @@
     "enabled": true
   },
   "vars": {
-    "CONTAINER_INSTANCE_NAME": "zscaler-mcp-v2",
+    "CONTAINER_INSTANCE_NAME": "zscaler-mcp-v3",
     "ZSCALER_MCP_TRANSPORT": "streamable-http",
     "ZSCALER_MCP_HOST": "0.0.0.0",
     "ZSCALER_MCP_PORT": "8000",
@@ -16,7 +16,9 @@
     "ZSCALER_MCP_DISABLE_HOST_VALIDATION": "true",
     "ZSCALER_MCP_AUTH_ENABLED": "true",
     "ZSCALER_MCP_AUTH_MODE": "zscaler",
-    "ZSCALER_CLOUD": "production"
+    "ZSCALER_CLOUD": "production",
+    "ZSCALER_MCP_WRITE_ENABLED": "true",
+    "ZSCALER_MCP_WRITE_TOOLS": "*"
   },
   "containers": [
     {

@@ -20,6 +20,8 @@ export class ZscalerMcpContainer extends Container {
     ZSCALER_MCP_AUTH_ENABLED: "true",
     ZSCALER_MCP_AUTH_MODE: "zscaler",
     ZSCALER_CLOUD: "production",
+    ZSCALER_MCP_WRITE_ENABLED: "true",
+    ZSCALER_MCP_WRITE_TOOLS: "*",
   };
 }
 
@@ -35,7 +37,7 @@ export default {
       });
     }
 
-    const instanceName = env.CONTAINER_INSTANCE_NAME || "zscaler-mcp";
+    const instanceName = env.CONTAINER_INSTANCE_NAME || "zscaler-mcp-v3";
     const container = env.ZSCALER_MCP_CONTAINER.getByName(instanceName);
 
     await container.startAndWaitForPorts();
