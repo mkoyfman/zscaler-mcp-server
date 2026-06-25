@@ -45,10 +45,10 @@ class TestZiaDlpWriteTools:
                 "dictionaryType": "PATTERNS_AND_PHRASES",
                 "description": "Test dictionary",
                 "phrases": [
-                    {"action": "all", "phrase": "Abracadabra"},
-                    {"action": "unique", "phrase": "Swordfish"},
+                    {"action": "PHRASE_COUNT_TYPE_ALL", "phrase": "Abracadabra"},
+                    {"action": "PHRASE_COUNT_TYPE_UNIQUE", "phrase": "Swordfish"},
                 ],
-                "patterns": [{"action": "all", "pattern": r"ACME-\d{4}"}],
+                "patterns": [{"action": "PATTERN_COUNT_TYPE_ALL", "pattern": r"ACME-\d{4}"}],
             },
         )
 

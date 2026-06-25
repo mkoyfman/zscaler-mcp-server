@@ -31,6 +31,16 @@ from zscaler_mcp.utils.utils import parse_list
 JsonList = Optional[Union[List[Any], str]]
 
 _ENTRY_ACTIONS = {"all", "unique"}
+_ENTRY_ACTION_ENUMS = {
+    "phrase": {
+        "all": "PHRASE_COUNT_TYPE_ALL",
+        "unique": "PHRASE_COUNT_TYPE_UNIQUE",
+    },
+    "pattern": {
+        "all": "PATTERN_COUNT_TYPE_ALL",
+        "unique": "PATTERN_COUNT_TYPE_UNIQUE",
+    },
+}
 _EXPRESSION_JOIN_OPERATORS = {"AND", "OR"}
 _EXPRESSION_COMPARATORS = {">", ">=", "<", "<=", "==", "!="}
 
@@ -96,7 +106,7 @@ def _normalize_entries(
         action = action.strip()
         lowered_action = action.lower()
         if lowered_action in _ENTRY_ACTIONS:
-            action = lowered_action
+            action = _ENTRY_ACTION_ENUMS[text_key][lowered_action]
         elif not re.fullmatch(r"[A-Z][A-Z0-9_]*", action):
             raise ValueError(
                 f"Invalid {text_key} action {action!r}; expected one of "

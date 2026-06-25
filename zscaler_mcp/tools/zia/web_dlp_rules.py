@@ -29,11 +29,13 @@ def _build_web_dlp_rule_payload(
     rank: Optional[int] = None,
     order: Optional[int] = None,
     file_types: Optional[Union[List[str], str]] = None,
+    protocols: Optional[Union[List[str], str]] = None,
     min_size: Optional[str] = None,
     match_only: Optional[bool] = None,
     dlp_engines: Optional[Union[List[int], str]] = None,
     dlp_content_locations_scopes: Optional[Union[List[str], str]] = None,
     dlp_download_scan_enabled: Optional[bool] = None,
+    inspect_http_get_enabled: Optional[bool] = None,
     without_content_inspection: Optional[bool] = None,
     ocr_enabled: Optional[bool] = None,
     external_auditor_email: Optional[str] = None,
@@ -75,6 +77,8 @@ def _build_web_dlp_rule_payload(
     # File and content parameters
     if file_types is not None:
         payload["file_types"] = parse_list(file_types)
+    if protocols is not None:
+        payload["protocols"] = parse_list(protocols)
     if min_size is not None:
         payload["min_size"] = min_size
     if match_only is not None:
@@ -85,6 +89,8 @@ def _build_web_dlp_rule_payload(
         payload["dlp_content_locations_scopes"] = parse_list(dlp_content_locations_scopes)
     if dlp_download_scan_enabled is not None:
         payload["dlp_download_scan_enabled"] = dlp_download_scan_enabled
+    if inspect_http_get_enabled is not None:
+        payload["inspect_http_get_enabled"] = inspect_http_get_enabled
     if without_content_inspection is not None:
         payload["without_content_inspection"] = without_content_inspection
     if ocr_enabled is not None:
@@ -266,6 +272,15 @@ def zia_create_web_dlp_rule(
             description="List of file types the DLP policy rule applies to. Accepts JSON string or list."
         ),
     ] = None,
+    protocols: Annotated[
+        Optional[Union[List[str], str]],
+        Field(
+            description=(
+                "Protocols this DLP rule applies to. Accepts JSON string or list. "
+                "Use ['ANY_RULE'] for all protocols."
+            )
+        ),
+    ] = None,
     min_size: Annotated[
         Optional[str],
         Field(description="Minimum file size (in KB) for DLP policy rule evaluation."),
@@ -284,6 +299,9 @@ def zia_create_web_dlp_rule(
     ] = None,
     dlp_download_scan_enabled: Annotated[
         Optional[bool], Field(description="True enables DLP scan for file downloads.")
+    ] = None,
+    inspect_http_get_enabled: Annotated[
+        Optional[bool], Field(description="True enables inspection of HTTP GET traffic.")
     ] = None,
     without_content_inspection: Annotated[
         Optional[bool], Field(description="True indicates a DLP rule without content inspection.")
@@ -393,11 +411,13 @@ def zia_create_web_dlp_rule(
         rank=rank,
         order=order,
         file_types=file_types,
+        protocols=protocols,
         min_size=min_size,
         match_only=match_only,
         dlp_engines=dlp_engines,
         dlp_content_locations_scopes=dlp_content_locations_scopes,
         dlp_download_scan_enabled=dlp_download_scan_enabled,
+        inspect_http_get_enabled=inspect_http_get_enabled,
         without_content_inspection=without_content_inspection,
         ocr_enabled=ocr_enabled,
         external_auditor_email=external_auditor_email,
@@ -452,6 +472,15 @@ def zia_update_web_dlp_rule(
             description="List of file types the DLP policy rule applies to. Accepts JSON string or list."
         ),
     ] = None,
+    protocols: Annotated[
+        Optional[Union[List[str], str]],
+        Field(
+            description=(
+                "Protocols this DLP rule applies to. Accepts JSON string or list. "
+                "Use ['ANY_RULE'] for all protocols."
+            )
+        ),
+    ] = None,
     min_size: Annotated[
         Optional[str],
         Field(description="Minimum file size (in KB) for DLP policy rule evaluation."),
@@ -470,6 +499,9 @@ def zia_update_web_dlp_rule(
     ] = None,
     dlp_download_scan_enabled: Annotated[
         Optional[bool], Field(description="True enables DLP scan for file downloads.")
+    ] = None,
+    inspect_http_get_enabled: Annotated[
+        Optional[bool], Field(description="True enables inspection of HTTP GET traffic.")
     ] = None,
     without_content_inspection: Annotated[
         Optional[bool], Field(description="True indicates a DLP rule without content inspection.")
@@ -579,11 +611,13 @@ def zia_update_web_dlp_rule(
         rank=rank,
         order=order,
         file_types=file_types,
+        protocols=protocols,
         min_size=min_size,
         match_only=match_only,
         dlp_engines=dlp_engines,
         dlp_content_locations_scopes=dlp_content_locations_scopes,
         dlp_download_scan_enabled=dlp_download_scan_enabled,
+        inspect_http_get_enabled=inspect_http_get_enabled,
         without_content_inspection=without_content_inspection,
         ocr_enabled=ocr_enabled,
         external_auditor_email=external_auditor_email,

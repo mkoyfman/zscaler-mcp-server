@@ -27,6 +27,8 @@ class TestWebDlpWriteEdgeCases:
             rule_action="BLOCK",
             cloud_applications=["CHATGPT_AI", "CLAUDE_AI"],
             dlp_engines=[25],
+            protocols=["ANY_RULE"],
+            inspect_http_get_enabled=False,
             order=1,
         )
 
@@ -34,6 +36,8 @@ class TestWebDlpWriteEdgeCases:
         mock_client.zia.dlp_web_rules.add_rule.assert_called_once()
         payload = mock_client.zia.dlp_web_rules.add_rule.call_args.kwargs
         assert payload["cloud_applications"] == ["CHATGPT_AI", "CLAUDE_AI"]
+        assert payload["protocols"] == ["ANY_RULE"]
+        assert payload["inspect_http_get_enabled"] is False
 
 
 class TestCloudAppControlIsolationProfile:
