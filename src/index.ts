@@ -19,7 +19,6 @@ export class ZscalerMcpContainer extends Container {
     ZSCALER_MCP_DISABLE_HOST_VALIDATION: "true",
     ZSCALER_MCP_AUTH_ENABLED: "true",
     ZSCALER_MCP_AUTH_MODE: "zscaler",
-    ZSCALER_CLOUD: "production",
     ZSCALER_MCP_WRITE_ENABLED: "true",
     ZSCALER_MCP_WRITE_TOOLS: "*",
   };
