@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import ast
 import html
+import json
 import re
 from typing import Annotated, Any, Dict, List, Optional, Union
 
@@ -92,17 +93,75 @@ def _normalize_entries(
                 "{\"action\": ..., \"%s\": ...}, or [action, value]" % text_key
             )
 
-        action = action.lower()
-        if action not in _ENTRY_ACTIONS:
+        action = action.strip()
+        lowered_action = action.lower()
+        if lowered_action in _ENTRY_ACTIONS:
+            action = lowered_action
+        elif not re.fullmatch(r"[A-Z][A-Z0-9_]*", action):
             raise ValueError(
                 f"Invalid {text_key} action {action!r}; expected one of "
-                f"{sorted(_ENTRY_ACTIONS)}"
+                f"{sorted(_ENTRY_ACTIONS)} or a canonical ZIA action enum"
             )
         if text is None or str(text) == "":
             raise ValueError(f"{text_key} entries cannot be empty")
         entries.append((action, str(text)))
 
     return entries
+
+
+def _parse_optional_object(value: Optional[Union[Dict[str, Any], str]], field_name: str) -> Dict[str, Any]:
+    if value is None:
+        return {}
+    if isinstance(value, str):
+        try:
+            parsed = json.loads(value)
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"{field_name} must be a JSON object string") from exc
+    else:
+        parsed = value
+    if not isinstance(parsed, dict):
+        raise ValueError(f"{field_name} must be an object/dict or JSON object string")
+    return dict(parsed)
+
+
+def _entries_to_payload(entries: Optional[List[tuple[str, str]]], text_key: str) -> Optional[List[dict]]:
+    if entries is None:
+        return None
+    return [{"action": action, text_key: text} for action, text in entries]
+
+
+def _execute_dlp_dictionary_write(
+    api: Any,
+    *,
+    method: str,
+    path_suffix: str = "",
+    payload: Dict[str, Any],
+) -> Dict[str, Any]:
+    """Execute dictionary writes directly so advanced payloads are not reshaped.
+
+    The SDK's convenience methods reformat phrases/patterns from tuple
+    inputs.  Direct execution keeps the MCP payload visible and lets callers
+    pass exact API fields through ``payload_overrides`` when ZIA adds or
+    changes enum values.
+    """
+    from zscaler.utils import format_url
+
+    api_url = format_url(f"""
+        {api._zia_base_endpoint}
+        /dlpDictionaries{path_suffix}
+    """)
+    request, error = api._request_executor.create_request(
+        method=method.upper(),
+        endpoint=api_url,
+        body=payload,
+    )
+    if error:
+        raise Exception(f"Failed to build DLP dictionary request: {error}")
+    response, error = api._request_executor.execute(request)
+    if error:
+        raise Exception(f"Failed to execute DLP dictionary request: {error}")
+    body = response.get_body()
+    return body if isinstance(body, dict) else {"result": body}
 
 
 def _normalize_id_list(values: Optional[Union[List[Union[int, str]], str]]) -> List[Union[int, str]]:
@@ -257,6 +316,16 @@ def zia_create_dlp_dictionary(
         str,
         Field(description="ZIA dictionaryType value."),
     ] = "PATTERNS_AND_PHRASES",
+    payload_overrides: Annotated[
+        Optional[Union[Dict[str, Any], str]],
+        Field(
+            description=(
+                "Advanced exact API fields to merge into the create payload. "
+                "Accepts an object or JSON object string. Use this only when "
+                "ZIA requires a field/enum not yet surfaced as a first-class parameter."
+            )
+        ),
+    ] = None,
     default_action: Annotated[
         str,
         Field(description="Default action for string-only phrase/pattern entries: all or unique."),
@@ -275,25 +344,26 @@ def zia_create_dlp_dictionary(
     if not normalized_phrases and not normalized_patterns:
         raise ValueError("At least one phrase or pattern is required")
 
-    payload: Dict[str, Any] = {}
+    payload: Dict[str, Any] = {
+        "name": name,
+        "customPhraseMatchType": _normalize_phrase_match_type(custom_phrase_match_type),
+        "dictionaryType": dictionary_type,
+    }
     if description is not None:
         payload["description"] = description
     if normalized_phrases is not None:
-        payload["phrases"] = normalized_phrases
+        payload["phrases"] = _entries_to_payload(normalized_phrases, "phrase")
     if normalized_patterns is not None:
-        payload["patterns"] = normalized_patterns
+        payload["patterns"] = _entries_to_payload(normalized_patterns, "pattern")
+    payload.update(_parse_optional_object(payload_overrides, "payload_overrides"))
 
     client = get_zscaler_client(service=service)
     api = client.zia.dlp_dictionary
-    created, _, err = api.add_dict(
-        name=name,
-        custom_phrase_match_type=_normalize_phrase_match_type(custom_phrase_match_type),
-        dictionary_type=dictionary_type,
-        **payload,
+    return _execute_dlp_dictionary_write(
+        api,
+        method="post",
+        payload=payload,
     )
-    if err:
-        raise Exception(f"Failed to create DLP dictionary: {err}")
-    return _as_dict(created)
 
 
 def zia_update_dlp_dictionary(
@@ -307,6 +377,15 @@ def zia_update_dlp_dictionary(
         Field(description="Optional replacement customPhraseMatchType. Friendly any/all accepted."),
     ] = None,
     dictionary_type: Annotated[Optional[str], Field(description="Optional replacement dictionaryType.")] = None,
+    payload_overrides: Annotated[
+        Optional[Union[Dict[str, Any], str]],
+        Field(
+            description=(
+                "Advanced exact API fields to merge into the update payload. "
+                "Accepts an object or JSON object string."
+            )
+        ),
+    ] = None,
     default_action: Annotated[
         str,
         Field(description="Default action for string-only phrase/pattern entries: all or unique."),
@@ -327,22 +406,27 @@ def zia_update_dlp_dictionary(
     if dictionary_type is not None:
         payload["dictionaryType"] = dictionary_type
     if phrases is not None:
-        payload["phrases"] = _normalize_entries(
-            phrases, text_key="phrase", default_action=default_action
+        payload["phrases"] = _entries_to_payload(
+            _normalize_entries(phrases, text_key="phrase", default_action=default_action),
+            "phrase",
         )
     if patterns is not None:
-        payload["patterns"] = _normalize_entries(
-            patterns, text_key="pattern", default_action=default_action
+        payload["patterns"] = _entries_to_payload(
+            _normalize_entries(patterns, text_key="pattern", default_action=default_action),
+            "pattern",
         )
+    payload.update(_parse_optional_object(payload_overrides, "payload_overrides"))
     if not payload:
         raise ValueError("At least one update field must be supplied")
 
     client = get_zscaler_client(service=service)
     api = client.zia.dlp_dictionary
-    updated, _, err = api.update_dict(dict_id, **payload)
-    if err:
-        raise Exception(f"Failed to update DLP dictionary {dict_id}: {err}")
-    return _as_dict(updated)
+    return _execute_dlp_dictionary_write(
+        api,
+        method="put",
+        path_suffix=f"/{dict_id}",
+        payload=payload,
+    )
 
 
 def zia_delete_dlp_dictionary(

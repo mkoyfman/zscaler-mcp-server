@@ -558,6 +558,45 @@ def _resolve_cloud_apps_for_cac(
     return resolved, (audit if transformed else None)
 
 
+def _parse_optional_object(value: Optional[Union[dict, str]], field_name: str) -> Optional[dict]:
+    if value is None:
+        return None
+    if isinstance(value, str):
+        parsed = parse_list(value)
+    else:
+        parsed = value
+    if not isinstance(parsed, dict):
+        raise ValueError(f"{field_name} must be an object/dict or JSON object string")
+    return dict(parsed)
+
+
+def _build_cbi_profile(
+    *,
+    cbi_profile: Optional[Union[dict, str]] = None,
+    isolation_profile_id: Optional[Union[int, str]] = None,
+    isolation_profile_name: Optional[str] = None,
+) -> Optional[dict]:
+    """Build the ``cbiProfile`` object required by ZIA isolate actions."""
+    profile = _parse_optional_object(cbi_profile, "cbi_profile") or {}
+
+    # Accept both MCP-friendly and wire-format key spellings.
+    profile_id = isolation_profile_id
+    if profile_id is None:
+        profile_id = profile.get("id") or profile.get("profile_id") or profile.get("profileId")
+    profile_name = isolation_profile_name
+    if profile_name is None:
+        profile_name = profile.get("name") or profile.get("profile_name") or profile.get("profileName")
+
+    if profile_id is None and profile_name is None:
+        return None
+    if profile_id is None or profile_name is None:
+        raise ValueError(
+            "ZIA isolate actions require both isolation_profile_id and "
+            "isolation_profile_name, or cbi_profile with both id and name."
+        )
+    return {"id": profile_id, "name": profile_name}
+
+
 def _build_cac_rule_payload(
     name: Optional[str] = None,
     description: Optional[str] = None,
@@ -583,6 +622,9 @@ def _build_cac_rule_payload(
     validity_time_zone_id: Optional[str] = None,
     size_quota: Optional[int] = None,
     time_quota: Optional[int] = None,
+    cbi_profile: Optional[Union[dict, str]] = None,
+    isolation_profile_id: Optional[Union[int, str]] = None,
+    isolation_profile_name: Optional[str] = None,
 ) -> dict:
     """Build a CAC rule payload dict for ``add_rule`` / ``update_rule``.
 
@@ -614,6 +656,14 @@ def _build_cac_rule_payload(
         payload["size_quota"] = size_quota
     if time_quota is not None:
         payload["time_quota"] = time_quota
+    cbi_profile_payload = _build_cbi_profile(
+        cbi_profile=cbi_profile,
+        isolation_profile_id=isolation_profile_id,
+        isolation_profile_name=isolation_profile_name,
+    )
+    if cbi_profile_payload is not None:
+        # The SDK does not remap this field, so use the ZIA wire key.
+        payload["cbiProfile"] = cbi_profile_payload
 
     list_fields: list[tuple[str, Any, str]] = [
         ("actions", actions, "actions"),
@@ -636,6 +686,19 @@ def _build_cac_rule_payload(
             payload[sdk_name] = parse_list(value)
 
     return payload
+
+
+def _validate_isolation_payload(actions: Optional[Union[List[str], str]], payload: dict) -> None:
+    parsed_actions = parse_list(actions) if actions is not None else []
+    if isinstance(parsed_actions, str):
+        parsed_actions = [parsed_actions]
+    if any(str(action).upper().startswith("ISOLATE_") for action in parsed_actions or []):
+        profile = payload.get("cbiProfile") or {}
+        if not profile.get("id") or not profile.get("name"):
+            raise ValueError(
+                "Cloud App Control isolate actions require an isolation profile. "
+                "Pass isolation_profile_id and isolation_profile_name, or cbi_profile."
+            )
 
 
 # -----------------------------------------------------------------------------
@@ -897,6 +960,34 @@ def zia_create_cloud_app_control_rule(
         Optional[int],
         Field(description="Time quota in minutes after which the policy applies."),
     ] = None,
+    isolation_profile_id: Annotated[
+        Optional[Union[int, str]],
+        Field(
+            description=(
+                "Cloud Browser Isolation profile ID. Required with "
+                "ISOLATE_* actions unless cbi_profile supplies both id and name."
+            )
+        ),
+    ] = None,
+    isolation_profile_name: Annotated[
+        Optional[str],
+        Field(
+            description=(
+                "Cloud Browser Isolation profile name. Required with "
+                "ISOLATE_* actions unless cbi_profile supplies both id and name."
+            )
+        ),
+    ] = None,
+    cbi_profile: Annotated[
+        Optional[Union[dict, str]],
+        Field(
+            description=(
+                "Advanced: full ZIA cbiProfile object, e.g. "
+                "{\"id\": 123, \"name\": \"Default Isolation\"}. "
+                "Used by ISOLATE_* Cloud App Control actions."
+            )
+        ),
+    ] = None,
     resolve_cloud_apps: Annotated[
         bool,
         Field(
@@ -1030,7 +1121,11 @@ def zia_create_cloud_app_control_rule(
         validity_time_zone_id=validity_time_zone_id,
         size_quota=size_quota,
         time_quota=time_quota,
+        cbi_profile=cbi_profile,
+        isolation_profile_id=isolation_profile_id,
+        isolation_profile_name=isolation_profile_name,
     )
+    _validate_isolation_payload(actions, payload)
 
     client = get_zscaler_client(service=service)
     cac = client.zia.cloudappcontrol
@@ -1152,6 +1247,34 @@ def zia_update_cloud_app_control_rule(
     ] = None,
     size_quota: Annotated[Optional[int], Field(description="Size quota in KB.")] = None,
     time_quota: Annotated[Optional[int], Field(description="Time quota in minutes.")] = None,
+    isolation_profile_id: Annotated[
+        Optional[Union[int, str]],
+        Field(
+            description=(
+                "Cloud Browser Isolation profile ID. Required when updating "
+                "the rule to use ISOLATE_* actions unless cbi_profile supplies both id and name."
+            )
+        ),
+    ] = None,
+    isolation_profile_name: Annotated[
+        Optional[str],
+        Field(
+            description=(
+                "Cloud Browser Isolation profile name. Required when updating "
+                "the rule to use ISOLATE_* actions unless cbi_profile supplies both id and name."
+            )
+        ),
+    ] = None,
+    cbi_profile: Annotated[
+        Optional[Union[dict, str]],
+        Field(
+            description=(
+                "Advanced: full ZIA cbiProfile object, e.g. "
+                "{\"id\": 123, \"name\": \"Default Isolation\"}. "
+                "Used by ISOLATE_* Cloud App Control actions."
+            )
+        ),
+    ] = None,
     resolve_cloud_apps: Annotated[
         bool,
         Field(
@@ -1259,7 +1382,11 @@ def zia_update_cloud_app_control_rule(
         validity_time_zone_id=validity_time_zone_id,
         size_quota=size_quota,
         time_quota=time_quota,
+        cbi_profile=cbi_profile,
+        isolation_profile_id=isolation_profile_id,
+        isolation_profile_name=isolation_profile_name,
     )
+    _validate_isolation_payload(actions, payload)
 
     client = get_zscaler_client(service=service)
     cac = client.zia.cloudappcontrol

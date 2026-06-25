@@ -17,6 +17,9 @@ from zscaler_mcp.utils.utils import parse_list
 # Helper Functions
 # ============================================================================
 
+IdListParam = Optional[Union[List[Union[int, str]], str]]
+CloudApplicationsParam = Optional[Union[List[Union[int, str]], str]]
+
 
 def _build_web_dlp_rule_payload(
     name: Optional[str] = None,
@@ -36,7 +39,7 @@ def _build_web_dlp_rule_payload(
     external_auditor_email: Optional[str] = None,
     zcc_notifications_enabled: Optional[bool] = None,
     auditor: Optional[Union[List[int], str]] = None,
-    cloud_applications: Optional[Union[List[int], str]] = None,
+    cloud_applications: CloudApplicationsParam = None,
     departments: Optional[Union[List[int], str]] = None,
     excluded_groups: Optional[Union[List[int], str]] = None,
     excluded_departments: Optional[Union[List[int], str]] = None,
@@ -299,8 +302,14 @@ def zia_create_web_dlp_rule(
         Field(description="IDs for the auditors this rule applies to."),
     ] = None,
     cloud_applications: Annotated[
-        Optional[Union[List[int], str]],
-        Field(description="IDs for cloud applications this rule applies to."),
+        CloudApplicationsParam,
+        Field(
+            description=(
+                "Cloud applications this rule applies to. Accepts canonical "
+                "ZIA cloud-application enum strings such as CHATGPT_AI, "
+                "numeric IDs, a list, or a JSON string."
+            )
+        ),
     ] = None,
     departments: Annotated[
         Optional[Union[List[int], str]],
@@ -479,8 +488,14 @@ def zia_update_web_dlp_rule(
         Field(description="IDs for the auditors this rule applies to."),
     ] = None,
     cloud_applications: Annotated[
-        Optional[Union[List[int], str]],
-        Field(description="IDs for cloud applications this rule applies to."),
+        CloudApplicationsParam,
+        Field(
+            description=(
+                "Cloud applications this rule applies to. Accepts canonical "
+                "ZIA cloud-application enum strings such as CHATGPT_AI, "
+                "numeric IDs, a list, or a JSON string."
+            )
+        ),
     ] = None,
     departments: Annotated[
         Optional[Union[List[int], str]],

@@ -15,8 +15,17 @@ class TestZiaDlpWriteTools:
         from zscaler_mcp.tools.zia.dlp_write import zia_create_dlp_dictionary
 
         mock_client = MagicMock()
-        created = _mock_obj({"id": 123, "name": "Sensitive Keywords"})
-        mock_client.zia.dlp_dictionary.add_dict.return_value = (created, None, None)
+        mock_response = MagicMock()
+        mock_response.get_body.return_value = {"id": 123, "name": "Sensitive Keywords"}
+        mock_client.zia.dlp_dictionary._zia_base_endpoint = "/zia/api/v1"
+        mock_client.zia.dlp_dictionary._request_executor.create_request.return_value = (
+            "request",
+            None,
+        )
+        mock_client.zia.dlp_dictionary._request_executor.execute.return_value = (
+            mock_response,
+            None,
+        )
         mock_get_client.return_value = mock_client
 
         result = zia_create_dlp_dictionary(
@@ -27,13 +36,20 @@ class TestZiaDlpWriteTools:
         )
 
         assert result["id"] == 123
-        mock_client.zia.dlp_dictionary.add_dict.assert_called_once_with(
-            name="Sensitive Keywords",
-            custom_phrase_match_type="MATCH_ANY_CUSTOM_PHRASE_PATTERN_DICTIONARY",
-            dictionary_type="PATTERNS_AND_PHRASES",
-            description="Test dictionary",
-            phrases=[("all", "Abracadabra"), ("unique", "Swordfish")],
-            patterns=[("all", r"ACME-\d{4}")],
+        mock_client.zia.dlp_dictionary._request_executor.create_request.assert_called_once_with(
+            method="POST",
+            endpoint="/zia/api/v1/dlpDictionaries",
+            body={
+                "name": "Sensitive Keywords",
+                "customPhraseMatchType": "MATCH_ANY_CUSTOM_PHRASE_PATTERN_DICTIONARY",
+                "dictionaryType": "PATTERNS_AND_PHRASES",
+                "description": "Test dictionary",
+                "phrases": [
+                    {"action": "all", "phrase": "Abracadabra"},
+                    {"action": "unique", "phrase": "Swordfish"},
+                ],
+                "patterns": [{"action": "all", "pattern": r"ACME-\d{4}"}],
+            },
         )
 
     def test_create_dlp_dictionary_requires_content(self):
