@@ -351,8 +351,18 @@ def zia_create_dlp_dictionary(
     normalized_patterns = _normalize_entries(
         patterns, text_key="pattern", default_action=default_action
     )
-    if not normalized_phrases and not normalized_patterns:
-        raise ValueError("At least one phrase or pattern is required")
+    advanced_payload = _parse_optional_object(payload_overrides, "payload_overrides")
+    is_clone_payload = bool(
+        advanced_payload.get("predefined_clone")
+        or advanced_payload.get("predefinedClone")
+        or advanced_payload.get("dict_template_id")
+        or advanced_payload.get("dictTemplateId")
+    )
+    if not normalized_phrases and not normalized_patterns and not is_clone_payload:
+        raise ValueError(
+            "At least one phrase or pattern is required unless payload_overrides "
+            "contains clone/template fields such as predefined_clone or dict_template_id"
+        )
 
     payload: Dict[str, Any] = {
         "name": name,
@@ -365,7 +375,7 @@ def zia_create_dlp_dictionary(
         payload["phrases"] = _entries_to_payload(normalized_phrases, "phrase")
     if normalized_patterns is not None:
         payload["patterns"] = _entries_to_payload(normalized_patterns, "pattern")
-    payload.update(_parse_optional_object(payload_overrides, "payload_overrides"))
+    payload.update(advanced_payload)
 
     client = get_zscaler_client(service=service)
     api = client.zia.dlp_dictionary

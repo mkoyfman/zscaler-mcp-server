@@ -26,6 +26,7 @@ def _build_web_dlp_rule_payload(
     description: Optional[str] = None,
     rule_action: Optional[str] = None,
     enabled: Optional[bool] = None,
+    severity: Optional[str] = None,
     rank: Optional[int] = None,
     order: Optional[int] = None,
     file_types: Optional[Union[List[str], str]] = None,
@@ -69,6 +70,8 @@ def _build_web_dlp_rule_payload(
         payload["action"] = rule_action
     if enabled is not None:
         payload["enabled"] = enabled
+    if severity is not None:
+        payload["severity"] = severity
     if rank is not None:
         payload["rank"] = rank
     if order is not None:
@@ -262,6 +265,9 @@ def zia_create_web_dlp_rule(
     enabled: Annotated[
         Optional[bool], Field(description="True to enable rule, False to disable.")
     ] = True,
+    severity: Annotated[
+        Optional[str], Field(description="Optional ZIA rule severity enum, e.g. RULE_SEVERITY_INFO.")
+    ] = None,
     rank: Annotated[Optional[int], Field(description=RANK_FIELD_DESCRIPTION)] = None,
     order: Annotated[
         Optional[int], Field(description="Rule order, defaults to the bottom.")
@@ -408,6 +414,7 @@ def zia_create_web_dlp_rule(
         description=description,
         rule_action=rule_action,
         enabled=enabled,
+        severity=severity,
         rank=rank,
         order=order,
         file_types=file_types,
@@ -461,6 +468,9 @@ def zia_update_web_dlp_rule(
     ] = None,
     enabled: Annotated[
         Optional[bool], Field(description="True to enable rule, False to disable.")
+    ] = None,
+    severity: Annotated[
+        Optional[str], Field(description="Optional ZIA rule severity enum, e.g. RULE_SEVERITY_INFO.")
     ] = None,
     rank: Annotated[Optional[int], Field(description=RANK_FIELD_DESCRIPTION)] = None,
     order: Annotated[
@@ -608,6 +618,7 @@ def zia_update_web_dlp_rule(
         description=description,
         rule_action=rule_action,
         enabled=enabled,
+        severity=severity,
         rank=rank,
         order=order,
         file_types=file_types,
