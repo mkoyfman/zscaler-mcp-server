@@ -69,6 +69,16 @@ class ZCCService(BaseService):
         from .tools.zcc.list_devices import zcc_list_devices
         from .tools.zcc.list_forwarding_profiles import zcc_list_forwarding_profiles
         from .tools.zcc.list_trusted_networks import zcc_list_trusted_networks
+        from .tools.zcc.write_tools import (
+            zcc_create_trusted_network,
+            zcc_delete_forwarding_profile,
+            zcc_delete_trusted_network,
+            zcc_remove_devices,
+            zcc_remove_machine_tunnel,
+            zcc_update_device_cleanup_info,
+            zcc_update_forwarding_profile,
+            zcc_update_trusted_network,
+        )
 
         # All ZCC tools are read-only
         self.read_tools = [
@@ -94,7 +104,48 @@ class ZCCService(BaseService):
             },
         ]
 
-        self.write_tools = []  # ZCC has no write operations
+        self.write_tools = [
+            {
+                "func": zcc_create_trusted_network,
+                "name": "zcc_create_trusted_network",
+                "description": "Create a ZCC trusted network (write operation).",
+            },
+            {
+                "func": zcc_update_trusted_network,
+                "name": "zcc_update_trusted_network",
+                "description": "Update a ZCC trusted network (write operation).",
+            },
+            {
+                "func": zcc_delete_trusted_network,
+                "name": "zcc_delete_trusted_network",
+                "description": "Delete a ZCC trusted network (destructive operation).",
+            },
+            {
+                "func": zcc_update_forwarding_profile,
+                "name": "zcc_update_forwarding_profile",
+                "description": "Update a ZCC forwarding profile (write operation).",
+            },
+            {
+                "func": zcc_delete_forwarding_profile,
+                "name": "zcc_delete_forwarding_profile",
+                "description": "Delete a ZCC forwarding profile (destructive operation).",
+            },
+            {
+                "func": zcc_remove_devices,
+                "name": "zcc_remove_devices",
+                "description": "Remove or force-remove ZCC devices from Client Connector (destructive operation).",
+            },
+            {
+                "func": zcc_remove_machine_tunnel,
+                "name": "zcc_remove_machine_tunnel",
+                "description": "Remove a ZCC machine tunnel from a device (destructive operation).",
+            },
+            {
+                "func": zcc_update_device_cleanup_info,
+                "name": "zcc_update_device_cleanup_info",
+                "description": "Update ZCC device cleanup settings (write operation).",
+            },
+        ]
 
     def register_tools(
         self, server, enabled_tools=None, enable_write_tools=False, write_tools=None, disabled_tools=None,
@@ -1185,6 +1236,16 @@ class ZIAService(BaseService):
             zia_list_ips_signature_rules,
             zia_update_ips_signature_rule,
         )
+        from .tools.zia.dlp_write import (
+            zia_attach_dictionary_to_engine,
+            zia_attach_engine_to_policy,
+            zia_create_dlp_dictionary,
+            zia_create_dlp_engine,
+            zia_delete_dlp_dictionary,
+            zia_delete_dlp_engine,
+            zia_simulate_dlp_match,
+            zia_update_dlp_dictionary,
+        )
         from .tools.zia.list_dlp_dictionaries import zia_dlp_dictionary_manager
         from .tools.zia.list_dlp_engines import zia_dlp_engine_manager
         from .tools.zia.list_user_departments import zia_user_department_manager
@@ -1369,6 +1430,11 @@ class ZIAService(BaseService):
                 "func": zia_dlp_engine_manager,
                 "name": "get_zia_dlp_engines",
                 "description": "Manage ZIA DLP engines for data loss prevention rule processing (read-only)",
+            },
+            {
+                "func": zia_simulate_dlp_match,
+                "name": "zia_simulate_dlp_match",
+                "description": "Locally simulate DLP dictionary phrase/pattern matches and optional DLP engine expression evaluation (read-only; does not mutate ZIA).",
             },
             # User Management
             {
@@ -2205,6 +2271,42 @@ class ZIAService(BaseService):
                 "name": "zia_delete_ips_signature_rule",
                 "description": "Delete a custom ZIA IPS signature rule by ID (destructive operation, requires HMAC double-confirmation). After a successful delete, call zia_activate_configuration to apply the change.",
             },
+            # DLP Dictionaries and Engines
+            {
+                "func": zia_create_dlp_dictionary,
+                "name": "zia_create_dlp_dictionary",
+                "description": "Create a custom ZIA DLP dictionary with phrase and/or regex pattern entries (write operation). After creating a dictionary, attach it to a DLP engine with zia_attach_dictionary_to_engine or create a new engine with zia_create_dlp_engine.",
+            },
+            {
+                "func": zia_update_dlp_dictionary,
+                "name": "zia_update_dlp_dictionary",
+                "description": "Update a custom ZIA DLP dictionary (write operation). Supplied phrase/pattern lists are full replacements.",
+            },
+            {
+                "func": zia_delete_dlp_dictionary,
+                "name": "zia_delete_dlp_dictionary",
+                "description": "Delete a custom ZIA DLP dictionary by ID (destructive operation, requires HMAC confirmation token).",
+            },
+            {
+                "func": zia_create_dlp_engine,
+                "name": "zia_create_dlp_engine",
+                "description": "Create a custom ZIA DLP engine from a DLP expression such as ((D63.S > 0) OR (D50.S > 0)) (write operation).",
+            },
+            {
+                "func": zia_delete_dlp_engine,
+                "name": "zia_delete_dlp_engine",
+                "description": "Delete a custom ZIA DLP engine by ID (destructive operation, requires HMAC confirmation token).",
+            },
+            {
+                "func": zia_attach_dictionary_to_engine,
+                "name": "zia_attach_dictionary_to_engine",
+                "description": "Attach a DLP dictionary to an existing custom DLP engine by appending a D<dictionary_id>.S threshold term to the engine expression (write operation).",
+            },
+            {
+                "func": zia_attach_engine_to_policy,
+                "name": "zia_attach_engine_to_policy",
+                "description": "Attach a DLP engine to an existing ZIA Web DLP policy rule while preserving the rule's current scope (write operation).",
+            },
             # Cloud App Control Rules
             {
                 "func": zia_create_cloud_app_control_rule,
@@ -2294,13 +2396,20 @@ class ZTWService(BaseService):
     def __init__(self, zscaler_client):
         super().__init__(zscaler_client)
         # Import verb-based ZTW tools
-        from .tools.ztw.account_details import ztw_list_public_account_details
-        from .tools.ztw.discovery_service import ztw_get_discovery_settings
+        from .tools.ztw.account_details import (
+            ztw_list_public_account_details,
+            ztw_update_public_account_status,
+        )
+        from .tools.ztw.discovery_service import (
+            ztw_get_discovery_settings,
+            ztw_update_discovery_service_permissions,
+        )
         from .tools.ztw.ip_destination_groups import (
             ztw_create_ip_destination_group,
             ztw_delete_ip_destination_group,
             ztw_list_ip_destination_groups,
             ztw_list_ip_destination_groups_lite,
+            ztw_update_ip_destination_group,
         )
         from .tools.ztw.ip_groups import (
             ztw_create_ip_group,
@@ -2314,11 +2423,34 @@ class ZTWService(BaseService):
             ztw_list_ip_source_groups,
             ztw_list_ip_source_groups_lite,
         )
-        from .tools.ztw.list_admins import ztw_list_admins
-        from .tools.ztw.list_roles import ztw_list_roles
+        from .tools.ztw.list_admins import (
+            ztw_change_admin_password,
+            ztw_create_admin,
+            ztw_delete_admin,
+            ztw_list_admins,
+            ztw_update_admin,
+        )
+        from .tools.ztw.list_roles import (
+            ztw_create_role,
+            ztw_delete_role,
+            ztw_list_roles,
+            ztw_update_role,
+        )
         from .tools.ztw.network_service_groups import ztw_list_network_service_groups
-        from .tools.ztw.network_services import ztw_list_network_services
-        from .tools.ztw.public_cloud_info import ztw_list_public_cloud_info
+        from .tools.ztw.network_services import (
+            ztw_create_network_service,
+            ztw_delete_network_service,
+            ztw_list_network_services,
+            ztw_update_network_service,
+        )
+        from .tools.ztw.public_cloud_info import (
+            ztw_change_public_cloud_info_state,
+            ztw_create_public_cloud_info,
+            ztw_delete_public_cloud_info,
+            ztw_generate_public_cloud_external_id,
+            ztw_list_public_cloud_info,
+            ztw_update_public_cloud_info,
+        )
 
         # Read-only tools
         self.read_tools = [
@@ -2397,6 +2529,11 @@ class ZTWService(BaseService):
                 "description": "Create a new ZTW IP destination group (write operation)",
             },
             {
+                "func": ztw_update_ip_destination_group,
+                "name": "ztw_update_ip_destination_group",
+                "description": "Update an existing ZTW IP destination group (write operation)",
+            },
+            {
                 "func": ztw_delete_ip_destination_group,
                 "name": "ztw_delete_ip_destination_group",
                 "description": "Delete a ZTW IP destination group (destructive operation)",
@@ -2420,6 +2557,91 @@ class ZTWService(BaseService):
                 "func": ztw_delete_ip_source_group,
                 "name": "ztw_delete_ip_source_group",
                 "description": "Delete a ZTW IP source group (destructive operation)",
+            },
+            {
+                "func": ztw_create_network_service,
+                "name": "ztw_create_network_service",
+                "description": "Create a new ZTW network service (write operation)",
+            },
+            {
+                "func": ztw_update_network_service,
+                "name": "ztw_update_network_service",
+                "description": "Update an existing ZTW network service (write operation)",
+            },
+            {
+                "func": ztw_delete_network_service,
+                "name": "ztw_delete_network_service",
+                "description": "Delete a ZTW network service (destructive operation)",
+            },
+            {
+                "func": ztw_create_role,
+                "name": "ztw_create_role",
+                "description": "Create a ZTW admin role (write operation)",
+            },
+            {
+                "func": ztw_update_role,
+                "name": "ztw_update_role",
+                "description": "Update a ZTW admin role (write operation)",
+            },
+            {
+                "func": ztw_delete_role,
+                "name": "ztw_delete_role",
+                "description": "Delete a ZTW admin role (destructive operation)",
+            },
+            {
+                "func": ztw_create_admin,
+                "name": "ztw_create_admin",
+                "description": "Create a ZTW admin user (write operation)",
+            },
+            {
+                "func": ztw_update_admin,
+                "name": "ztw_update_admin",
+                "description": "Update a ZTW admin user (write operation)",
+            },
+            {
+                "func": ztw_delete_admin,
+                "name": "ztw_delete_admin",
+                "description": "Delete a ZTW admin user (destructive operation)",
+            },
+            {
+                "func": ztw_change_admin_password,
+                "name": "ztw_change_admin_password",
+                "description": "Change a ZTW admin user's password (write operation)",
+            },
+            {
+                "func": ztw_create_public_cloud_info,
+                "name": "ztw_create_public_cloud_info",
+                "description": "Create ZTW public cloud account info (write operation)",
+            },
+            {
+                "func": ztw_update_public_cloud_info,
+                "name": "ztw_update_public_cloud_info",
+                "description": "Update ZTW public cloud account info (write operation)",
+            },
+            {
+                "func": ztw_delete_public_cloud_info,
+                "name": "ztw_delete_public_cloud_info",
+                "description": "Delete ZTW public cloud account info (destructive operation)",
+            },
+            {
+                "func": ztw_change_public_cloud_info_state,
+                "name": "ztw_change_public_cloud_info_state",
+                "description": "Change ZTW public cloud account state (write operation)",
+            },
+            {
+                "func": ztw_generate_public_cloud_external_id,
+                "name": "ztw_generate_public_cloud_external_id",
+                "description": "Generate a ZTW public cloud external ID (write/helper operation)",
+            },
+            {
+                "func": ztw_update_public_account_status,
+                "name": "ztw_update_public_account_status",
+                "description": "Update ZTW public cloud account status (write operation)",
+            },
+            {
+                "func": ztw_update_discovery_service_permissions,
+                "name": "ztw_update_discovery_service_permissions",
+                "description": "Update ZTW workload discovery service permissions (write operation)",
             },
         ]
 
@@ -2447,18 +2669,27 @@ class ZIDService(BaseService):
         super().__init__(zscaler_client)
         # Import verb-based ZIdentity tools
         from .tools.zid.groups import (
+            zid_add_user_to_group,
+            zid_add_users_to_group,
+            zid_create_group,
+            zid_delete_group,
             zid_get_group,
             zid_get_group_users,
             zid_get_group_users_by_name,
             zid_list_groups,
+            zid_remove_user_from_group,
             zid_search_groups,
+            zid_update_group,
         )
         from .tools.zid.users import (
+            zid_create_user,
+            zid_delete_user,
             zid_get_user,
             zid_get_user_groups,
             zid_get_user_groups_by_name,
             zid_list_users,
             zid_search_users,
+            zid_update_user,
         )
 
         # All ZIdentity tools are read-only
@@ -2515,7 +2746,53 @@ class ZIDService(BaseService):
             },
         ]
 
-        self.write_tools = []  # ZIdentity has no write operations
+        self.write_tools = [
+            {
+                "func": zid_create_group,
+                "name": "zid_create_group",
+                "description": "Create a ZIdentity group (write operation)",
+            },
+            {
+                "func": zid_update_group,
+                "name": "zid_update_group",
+                "description": "Update a ZIdentity group (write operation)",
+            },
+            {
+                "func": zid_delete_group,
+                "name": "zid_delete_group",
+                "description": "Delete a ZIdentity group (destructive operation)",
+            },
+            {
+                "func": zid_add_user_to_group,
+                "name": "zid_add_user_to_group",
+                "description": "Add a ZIdentity user to a group (write operation)",
+            },
+            {
+                "func": zid_add_users_to_group,
+                "name": "zid_add_users_to_group",
+                "description": "Add multiple ZIdentity users to a group (write operation)",
+            },
+            {
+                "func": zid_remove_user_from_group,
+                "name": "zid_remove_user_from_group",
+                "description": "Remove a ZIdentity user from a group (destructive operation)",
+            },
+            {
+                "func": zid_create_user,
+                "name": "zid_create_user",
+                "description": "Create a ZIdentity user (write operation)",
+            },
+            {
+                "func": zid_update_user,
+                "name": "zid_update_user",
+                "description": "Update a ZIdentity user (write operation)",
+            },
+            {
+                "func": zid_delete_user,
+                "name": "zid_delete_user",
+                "description": "Delete a ZIdentity user (destructive operation)",
+            },
+        ]
 
     def register_tools(
         self, server, enabled_tools=None, enable_write_tools=False, write_tools=None, disabled_tools=None,

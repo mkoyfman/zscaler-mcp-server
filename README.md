@@ -535,19 +535,19 @@ When `auth=` is provided:
 
 <!-- generated:start service-summary -->
 
-The Zscaler Integrations MCP Server provides **382 tools** for all major Zscaler services:
+The Zscaler Integrations MCP Server provides **425 tools** for all major Zscaler services:
 
 | Service | Description | Tools |
 |---------|-------------|-------|
-| **ZIA** | Zscaler Internet Access — Security policies | 166 read/write |
+| **ZIA** | Zscaler Internet Access — Security policies | 174 read/write |
 | **ZPA** | Zscaler Private Access — Application access | 109 read/write |
+| **ZTW** | Zscaler Workload Segmentation | 37 read/write |
 | **ZDX** | Zscaler Digital Experience — Monitoring & analytics | 31 read/write |
 | **ZMS** | Zscaler Microsegmentation — Agents, resources, policies | 20 read-only |
-| **ZTW** | Zscaler Workload Segmentation | 19 read/write |
+| **ZIdentity** | ZIdentity — Identity & access management | 19 read/write |
 | **Z-Insights** | Z-Insights analytics — Web traffic, cyber incidents, shadow IT | 16 read-only |
-| **ZIdentity** | ZIdentity — Identity & access management | 10 read-only |
+| **ZCC** | Zscaler Client Connector — Device management | 12 read/write |
 | **EASM** | External Attack Surface Management | 7 read-only |
-| **ZCC** | Zscaler Client Connector — Device management | 4 read-only |
 
 <!-- generated:end service-summary -->
 

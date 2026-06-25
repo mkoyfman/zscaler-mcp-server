@@ -51,9 +51,9 @@ The `meta` toolset (containing the connectivity check, service discovery, tool s
 | `zia_atp_policy` | yes | 7 | ZIA Advanced Threat Protection (ATP) policy: tenant-wide threat protection settings (zia_get_atp_settings / zia_update_atp_settings), the ATP security-exception bypass URL list (zia_get_atp_security_exceptions / zia_update_atp_security_exceptions), and the ATP malicious-URL denylist (zia_list_atp_malicious_urls / zia_add_atp_malicious_urls / zia_delete_atp_malicious_urls). All backed by the SDK's zscaler.zia.atp_policy.ATPPolicyAPI. |
 | `zia_authentication_settings` | yes | 3 | ZIA authentication settings: cookie-auth exempt URL list (zia_list_auth_exempt_urls / zia_add_auth_exempt_urls / zia_delete_auth_exempt_urls). Distinct from the ATP security-exception bypass list (see zia_atp_policy). |
 | `zia_cloud_app_control` | no | 8 | ZIA Cloud App Control policy rules + cloud-app catalog browsers. |
-| `zia_cloud_firewall` | yes | 58 | ZIA Cloud Firewall rules (filtering, DNS, IPS), network services, network application groups, IP source/destination groups. |
+| `zia_cloud_firewall` | yes | 62 | ZIA Cloud Firewall rules (filtering, DNS, IPS), network services, network application groups, IP source/destination groups. |
 | `zia_devices` | yes | 3 | ZIA device inventory: zia_list_devices, zia_list_devices_lite, zia_list_device_groups. Read-only — device enrollment lives in ZCC, not ZIA. |
-| `zia_dlp` | no | 8 | ZIA Web DLP rules, DLP dictionaries, DLP engines, DLP notification templates, ICAP servers. |
+| `zia_dlp` | no | 16 | ZIA Web DLP rules, DLP dictionaries, DLP engines, DLP notification templates, ICAP servers. |
 | `zia_file_type_control` | no | 6 | ZIA File Type Control rules and file type categories. |
 | `zia_locations` | yes | 26 | ZIA location and sub-location management, location groups, VPN credentials, static IPs, GRE tunnels. |
 | `zia_misc` | no | 0 | Miscellaneous ZIA resources that don't fit the above buckets (rule labels, forwarding rules, FTP control, etc.). |
@@ -106,19 +106,19 @@ The `meta` toolset (containing the connectivity check, service discovery, tool s
 
 | Id | Default | Tools | Coverage |
 |---|---|---|---|
-| `zcc` | yes | 4 | Zscaler Client Connector: enrolled-device inventory, trusted networks, forwarding profiles. |
+| `zcc` | yes | 12 | Zscaler Client Connector: enrolled-device inventory, trusted networks, forwarding profiles. |
 
 ### ZTW — Workload Segmentation
 
 | Id | Default | Tools | Coverage |
 |---|---|---|---|
-| `ztw` | no | 9 | Zscaler Workload Segmentation administration. |
+| `ztw` | no | 23 | Zscaler Workload Segmentation administration. |
 
 ### ZIdentity
 
 | Id | Default | Tools | Coverage |
 |---|---|---|---|
-| `zid` | no | 10 | ZIdentity user, group, role, and entitlement administration. |
+| `zid` | no | 19 | ZIdentity user, group, role, and entitlement administration. |
 
 ### EASM — External Attack Surface Management
 

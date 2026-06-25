@@ -1,9 +1,35 @@
-from typing import Annotated, Dict, List, Optional
+import json
+from typing import Annotated, Any, Dict, List, Optional, Union
 
 from pydantic import Field
 
 from zscaler_mcp.client import get_zscaler_client
 from zscaler_mcp.common.jmespath_utils import apply_jmespath
+
+
+JsonDict = Optional[Union[Dict[str, Any], str]]
+
+
+def _as_dict(value: Any) -> Any:
+    if hasattr(value, "as_dict"):
+        return value.as_dict()
+    if isinstance(value, list):
+        return [_as_dict(v) for v in value]
+    return value
+
+
+def _parse_dict(value: JsonDict) -> Dict[str, Any]:
+    if value is None:
+        return {}
+    if isinstance(value, str):
+        try:
+            parsed = json.loads(value)
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"Invalid JSON object: {exc}") from exc
+        if not isinstance(parsed, dict):
+            raise ValueError("JSON payload must be an object")
+        return parsed
+    return dict(value)
 
 # =============================================================================
 # READ-ONLY OPERATIONS
@@ -187,3 +213,73 @@ def zid_get_user_groups_by_name(
         raise Exception(f"Failed to fetch groups for user '{name}' (ID: {user_id}): {err}")
 
     return [group.as_dict() for group in groups_response]
+
+
+# =============================================================================
+# WRITE OPERATIONS
+# =============================================================================
+
+
+def zid_create_user(
+    payload: Annotated[
+        JsonDict,
+        Field(
+            description=(
+                "ZIdentity user creation body. Include fields accepted by the SDK/API, "
+                "such as login_name, display_name, primary_email, domain_name, etc."
+            )
+        ),
+    ],
+    service: Annotated[str, Field(description="The service to use.")] = "zid",
+) -> Dict:
+    """Create a ZIdentity user (write operation)."""
+    body = _parse_dict(payload)
+    if not body:
+        raise ValueError("payload is required")
+
+    client = get_zscaler_client(service=service)
+    user, _, err = client.zid.users.add_user(**body)
+    if err:
+        raise Exception(f"Failed to create ZIdentity user: {err}")
+    return _as_dict(user)
+
+
+def zid_update_user(
+    user_id: Annotated[str, Field(description="User ID to update.")],
+    payload: Annotated[JsonDict, Field(description="ZIdentity user update body.")],
+    service: Annotated[str, Field(description="The service to use.")] = "zid",
+) -> Dict:
+    """Update a ZIdentity user (write operation)."""
+    if not user_id:
+        raise ValueError("user_id is required")
+    body = _parse_dict(payload)
+    if not body:
+        raise ValueError("payload is required")
+
+    client = get_zscaler_client(service=service)
+    user, _, err = client.zid.users.update_user(user_id, **body)
+    if err:
+        raise Exception(f"Failed to update ZIdentity user {user_id}: {err}")
+    return _as_dict(user)
+
+
+def zid_delete_user(
+    user_id: Annotated[str, Field(description="User ID to delete.")],
+    service: Annotated[str, Field(description="The service to use.")] = "zid",
+    kwargs: str = "{}",
+) -> str:
+    """Delete a ZIdentity user (destructive write operation)."""
+    from zscaler_mcp.common.elicitation import check_confirmation, extract_confirmed_from_kwargs
+
+    if not user_id:
+        raise ValueError("user_id is required")
+    confirmed = extract_confirmed_from_kwargs(kwargs)
+    confirmation_check = check_confirmation("zid_delete_user", confirmed, {"user_id": user_id})
+    if confirmation_check:
+        return confirmation_check
+
+    client = get_zscaler_client(service=service)
+    _, _, err = client.zid.users.delete_user(user_id)
+    if err:
+        raise Exception(f"Failed to delete ZIdentity user {user_id}: {err}")
+    return f"ZIdentity user {user_id} deleted successfully."

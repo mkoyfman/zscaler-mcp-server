@@ -101,6 +101,14 @@
       "description": "Add URLs to a ZIA URL category (write operation)."
     },
     {
+      "name": "zia_attach_dictionary_to_engine",
+      "description": "Attach a DLP dictionary to an existing custom DLP engine by appending a D<dictionary_id>.S threshold term to the engine expression (write operation)."
+    },
+    {
+      "name": "zia_attach_engine_to_policy",
+      "description": "Attach a DLP engine to an existing ZIA Web DLP policy rule while preserving the rule's current scope (write operation)."
+    },
+    {
       "name": "zia_bulk_update_shadow_it_apps",
       "description": "Bulk update sanction state and/or custom tags on ZIA Shadow IT cloud applications (write operation)."
     },
@@ -119,6 +127,14 @@
     {
       "name": "zia_create_cloud_firewall_rule",
       "description": "Create a new ZIA cloud firewall rule (write operation)."
+    },
+    {
+      "name": "zia_create_dlp_dictionary",
+      "description": "Create a custom ZIA DLP dictionary with phrase and/or regex pattern entries (write operation)."
+    },
+    {
+      "name": "zia_create_dlp_engine",
+      "description": "Create a custom ZIA DLP engine from a DLP expression such as ((D63.S > 0) OR (D50.S > 0)) (write operation)."
     },
     {
       "name": "zia_create_file_type_control_rule",
@@ -215,6 +231,14 @@
     {
       "name": "zia_delete_cloud_firewall_rule",
       "description": "Delete a ZIA cloud firewall rule (destructive operation)."
+    },
+    {
+      "name": "zia_delete_dlp_dictionary",
+      "description": "Delete a custom ZIA DLP dictionary by ID (destructive operation, requires HMAC confirmation token)."
+    },
+    {
+      "name": "zia_delete_dlp_engine",
+      "description": "Delete a custom ZIA DLP engine by ID (destructive operation, requires HMAC confirmation token)."
     },
     {
       "name": "zia_delete_file_type_control_rule",
@@ -605,6 +629,10 @@
       "description": "Remove URLs from a ZIA URL category (write operation)."
     },
     {
+      "name": "zia_simulate_dlp_match",
+      "description": "Locally simulate DLP dictionary phrase/pattern matches and optional DLP engine expression evaluation (read-only; does not mutate ZIA)."
+    },
+    {
       "name": "zia_update_advanced_settings",
       "description": "Update the ZIA Advanced Settings block (write operation, PUT-replace)."
     },
@@ -643,6 +671,10 @@
     {
       "name": "zia_update_cloud_firewall_rule",
       "description": "Update an existing ZIA cloud firewall rule (write operation)."
+    },
+    {
+      "name": "zia_update_dlp_dictionary",
+      "description": "Update a custom ZIA DLP dictionary (write operation)."
     },
     {
       "name": "zia_update_file_type_control_rule",
@@ -1289,6 +1321,18 @@
       "description": "Start a deep trace for a ZDX device (write operation)."
     },
     {
+      "name": "zcc_create_trusted_network",
+      "description": "Create a ZCC trusted network (write operation)."
+    },
+    {
+      "name": "zcc_delete_forwarding_profile",
+      "description": "Delete a ZCC forwarding profile (destructive operation)."
+    },
+    {
+      "name": "zcc_delete_trusted_network",
+      "description": "Delete a ZCC trusted network (destructive operation)."
+    },
+    {
       "name": "zcc_get_device_otp",
       "description": "Get the One-Time Password (OTP) bundle for a Zscaler Client Connector device — includes logout_otp (One-Time Logout Password), exit_otp, uninstall_otp, revert_otp, and per-service disable OTPs (zia_disable_otp, zpa_disable_otp, zdx_disable_otp, zdp_disable_otp, anti_tempering_..."
     },
@@ -1305,6 +1349,38 @@
       "description": "Returns the list of Trusted Networks By Company ID in the Client Connector Portal (read-only) Supports JMESPath client-side filtering via the query parameter."
     },
     {
+      "name": "zcc_remove_devices",
+      "description": "Remove or force-remove ZCC devices from Client Connector (destructive operation)."
+    },
+    {
+      "name": "zcc_remove_machine_tunnel",
+      "description": "Remove a ZCC machine tunnel from a device (destructive operation)."
+    },
+    {
+      "name": "zcc_update_device_cleanup_info",
+      "description": "Update ZCC device cleanup settings (write operation)."
+    },
+    {
+      "name": "zcc_update_forwarding_profile",
+      "description": "Update a ZCC forwarding profile (write operation)."
+    },
+    {
+      "name": "zcc_update_trusted_network",
+      "description": "Update a ZCC trusted network (write operation)."
+    },
+    {
+      "name": "ztw_change_admin_password",
+      "description": "Change a ZTW admin user's password (write operation)."
+    },
+    {
+      "name": "ztw_change_public_cloud_info_state",
+      "description": "Change ZTW public cloud account state (write operation)."
+    },
+    {
+      "name": "ztw_create_admin",
+      "description": "Create a ZTW admin user (write operation)."
+    },
+    {
       "name": "ztw_create_ip_destination_group",
       "description": "Create a new ZTW IP destination group (write operation)."
     },
@@ -1317,6 +1393,22 @@
       "description": "Create a new ZTW IP source group (write operation)."
     },
     {
+      "name": "ztw_create_network_service",
+      "description": "Create a new ZTW network service (write operation)."
+    },
+    {
+      "name": "ztw_create_public_cloud_info",
+      "description": "Create ZTW public cloud account info (write operation)."
+    },
+    {
+      "name": "ztw_create_role",
+      "description": "Create a ZTW admin role (write operation)."
+    },
+    {
+      "name": "ztw_delete_admin",
+      "description": "Delete a ZTW admin user (destructive operation)."
+    },
+    {
       "name": "ztw_delete_ip_destination_group",
       "description": "Delete a ZTW IP destination group (destructive operation)."
     },
@@ -1327,6 +1419,22 @@
     {
       "name": "ztw_delete_ip_source_group",
       "description": "Delete a ZTW IP source group (destructive operation)."
+    },
+    {
+      "name": "ztw_delete_network_service",
+      "description": "Delete a ZTW network service (destructive operation)."
+    },
+    {
+      "name": "ztw_delete_public_cloud_info",
+      "description": "Delete ZTW public cloud account info (destructive operation)."
+    },
+    {
+      "name": "ztw_delete_role",
+      "description": "Delete a ZTW admin role (destructive operation)."
+    },
+    {
+      "name": "ztw_generate_public_cloud_external_id",
+      "description": "Generate a ZTW public cloud external ID (write/helper operation)."
     },
     {
       "name": "ztw_get_discovery_settings",
@@ -1381,6 +1489,58 @@
       "description": "List all existing admin roles in ZTW (read-only) Supports JMESPath client-side filtering via the query parameter."
     },
     {
+      "name": "ztw_update_admin",
+      "description": "Update a ZTW admin user (write operation)."
+    },
+    {
+      "name": "ztw_update_discovery_service_permissions",
+      "description": "Update ZTW workload discovery service permissions (write operation)."
+    },
+    {
+      "name": "ztw_update_ip_destination_group",
+      "description": "Update an existing ZTW IP destination group (write operation)."
+    },
+    {
+      "name": "ztw_update_network_service",
+      "description": "Update an existing ZTW network service (write operation)."
+    },
+    {
+      "name": "ztw_update_public_account_status",
+      "description": "Update ZTW public cloud account status (write operation)."
+    },
+    {
+      "name": "ztw_update_public_cloud_info",
+      "description": "Update ZTW public cloud account info (write operation)."
+    },
+    {
+      "name": "ztw_update_role",
+      "description": "Update a ZTW admin role (write operation)."
+    },
+    {
+      "name": "zid_add_user_to_group",
+      "description": "Add a ZIdentity user to a group (write operation)."
+    },
+    {
+      "name": "zid_add_users_to_group",
+      "description": "Add multiple ZIdentity users to a group (write operation)."
+    },
+    {
+      "name": "zid_create_group",
+      "description": "Create a ZIdentity group (write operation)."
+    },
+    {
+      "name": "zid_create_user",
+      "description": "Create a ZIdentity user (write operation)."
+    },
+    {
+      "name": "zid_delete_group",
+      "description": "Delete a ZIdentity group (destructive operation)."
+    },
+    {
+      "name": "zid_delete_user",
+      "description": "Delete a ZIdentity user (destructive operation)."
+    },
+    {
       "name": "zid_get_group",
       "description": "Get a specific ZIdentity group by ID (read-only)."
     },
@@ -1413,12 +1573,24 @@
       "description": "List ZIdentity users (read-only) Supports JMESPath client-side filtering via the query parameter."
     },
     {
+      "name": "zid_remove_user_from_group",
+      "description": "Remove a ZIdentity user from a group (destructive operation)."
+    },
+    {
       "name": "zid_search_groups",
       "description": "Search ZIdentity groups (read-only)."
     },
     {
       "name": "zid_search_users",
       "description": "Search ZIdentity users (read-only)."
+    },
+    {
+      "name": "zid_update_group",
+      "description": "Update a ZIdentity group (write operation)."
+    },
+    {
+      "name": "zid_update_user",
+      "description": "Update a ZIdentity user (write operation)."
     },
     {
       "name": "zeasm_get_finding_details",

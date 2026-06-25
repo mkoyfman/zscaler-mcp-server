@@ -1,9 +1,50 @@
-from typing import Annotated, Dict, List, Optional
+import json
+from typing import Annotated, Any, Dict, List, Optional, Union
 
 from pydantic import Field
 
 from zscaler_mcp.client import get_zscaler_client
 from zscaler_mcp.common.jmespath_utils import apply_jmespath
+
+
+JsonDict = Optional[Union[Dict[str, Any], str]]
+JsonList = Optional[Union[List[Any], str]]
+
+
+def _as_dict(value: Any) -> Any:
+    if hasattr(value, "as_dict"):
+        return value.as_dict()
+    if isinstance(value, list):
+        return [_as_dict(v) for v in value]
+    return value
+
+
+def _parse_dict(value: JsonDict) -> Dict[str, Any]:
+    if value is None:
+        return {}
+    if isinstance(value, str):
+        try:
+            parsed = json.loads(value)
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"Invalid JSON object: {exc}") from exc
+        if not isinstance(parsed, dict):
+            raise ValueError("JSON payload must be an object")
+        return parsed
+    return dict(value)
+
+
+def _parse_list(value: JsonList) -> List[Any]:
+    if value is None:
+        return []
+    if isinstance(value, str):
+        try:
+            parsed = json.loads(value)
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"Invalid JSON list: {exc}") from exc
+        if not isinstance(parsed, list):
+            raise ValueError("JSON value must be a list")
+        return parsed
+    return list(value)
 
 # =============================================================================
 # READ-ONLY OPERATIONS
@@ -148,3 +189,142 @@ def zid_get_group_users_by_name(
 
     users = users_response.records if hasattr(users_response, "records") else []
     return [user.as_dict() for user in users]
+
+
+# =============================================================================
+# WRITE OPERATIONS
+# =============================================================================
+
+
+def zid_create_group(
+    name: Annotated[Optional[str], Field(description="Group name.")] = None,
+    payload: Annotated[
+        JsonDict,
+        Field(
+            description=(
+                "ZIdentity group creation body. Use for SDK/API fields not exposed "
+                "as first-class tool parameters."
+            )
+        ),
+    ] = None,
+    service: Annotated[str, Field(description="The service to use.")] = "zid",
+) -> Dict:
+    """Create a ZIdentity group (write operation)."""
+    body = _parse_dict(payload)
+    if name is not None:
+        body["name"] = name
+    if not body:
+        raise ValueError("Supply name and/or payload")
+
+    client = get_zscaler_client(service=service)
+    group, _, err = client.zid.groups.add_group(**body)
+    if err:
+        raise Exception(f"Failed to create ZIdentity group: {err}")
+    return _as_dict(group)
+
+
+def zid_update_group(
+    group_id: Annotated[str, Field(description="Group ID to update.")],
+    payload: Annotated[JsonDict, Field(description="ZIdentity group update body.")],
+    service: Annotated[str, Field(description="The service to use.")] = "zid",
+) -> Dict:
+    """Update a ZIdentity group (write operation)."""
+    if not group_id:
+        raise ValueError("group_id is required")
+    body = _parse_dict(payload)
+    if not body:
+        raise ValueError("payload is required")
+
+    client = get_zscaler_client(service=service)
+    group, _, err = client.zid.groups.update_group(group_id, **body)
+    if err:
+        raise Exception(f"Failed to update ZIdentity group {group_id}: {err}")
+    return _as_dict(group)
+
+
+def zid_delete_group(
+    group_id: Annotated[str, Field(description="Group ID to delete.")],
+    service: Annotated[str, Field(description="The service to use.")] = "zid",
+    kwargs: str = "{}",
+) -> str:
+    """Delete a ZIdentity group (destructive write operation)."""
+    from zscaler_mcp.common.elicitation import check_confirmation, extract_confirmed_from_kwargs
+
+    if not group_id:
+        raise ValueError("group_id is required")
+    confirmed = extract_confirmed_from_kwargs(kwargs)
+    confirmation_check = check_confirmation("zid_delete_group", confirmed, {"group_id": group_id})
+    if confirmation_check:
+        return confirmation_check
+
+    client = get_zscaler_client(service=service)
+    _, _, err = client.zid.groups.delete_group(group_id)
+    if err:
+        raise Exception(f"Failed to delete ZIdentity group {group_id}: {err}")
+    return f"ZIdentity group {group_id} deleted successfully."
+
+
+def zid_add_user_to_group(
+    group_id: Annotated[str, Field(description="Group ID.")],
+    user_id: Annotated[str, Field(description="User ID to add to the group.")],
+    payload: Annotated[JsonDict, Field(description="Optional SDK request body fields.")] = None,
+    service: Annotated[str, Field(description="The service to use.")] = "zid",
+) -> Dict:
+    """Add one ZIdentity user to a group (write operation)."""
+    if not group_id or not user_id:
+        raise ValueError("group_id and user_id are required")
+
+    client = get_zscaler_client(service=service)
+    result, _, err = client.zid.groups.add_user_to_group(
+        group_id, user_id, **_parse_dict(payload)
+    )
+    if err:
+        raise Exception(f"Failed to add user {user_id} to group {group_id}: {err}")
+    return _as_dict(result)
+
+
+def zid_add_users_to_group(
+    group_id: Annotated[str, Field(description="Group ID.")],
+    user_ids: Annotated[JsonList, Field(description="List/JSON list of user IDs to add.")],
+    payload: Annotated[JsonDict, Field(description="Optional SDK request body fields.")] = None,
+    service: Annotated[str, Field(description="The service to use.")] = "zid",
+) -> Dict:
+    """Add multiple ZIdentity users to a group (write operation)."""
+    if not group_id:
+        raise ValueError("group_id is required")
+    parsed_user_ids = _parse_list(user_ids)
+    if not parsed_user_ids:
+        raise ValueError("user_ids is required")
+    body = _parse_dict(payload)
+    body.setdefault("user_ids", parsed_user_ids)
+
+    client = get_zscaler_client(service=service)
+    result, _, err = client.zid.groups.add_users_to_group(group_id, **body)
+    if err:
+        raise Exception(f"Failed to add users to group {group_id}: {err}")
+    return _as_dict(result)
+
+
+def zid_remove_user_from_group(
+    group_id: Annotated[str, Field(description="Group ID.")],
+    user_id: Annotated[str, Field(description="User ID to remove from the group.")],
+    service: Annotated[str, Field(description="The service to use.")] = "zid",
+    kwargs: str = "{}",
+) -> str:
+    """Remove one ZIdentity user from a group (destructive write operation)."""
+    from zscaler_mcp.common.elicitation import check_confirmation, extract_confirmed_from_kwargs
+
+    if not group_id or not user_id:
+        raise ValueError("group_id and user_id are required")
+    confirmed = extract_confirmed_from_kwargs(kwargs)
+    confirmation_check = check_confirmation(
+        "zid_remove_user_from_group", confirmed, {"group_id": group_id, "user_id": user_id}
+    )
+    if confirmation_check:
+        return confirmation_check
+
+    client = get_zscaler_client(service=service)
+    _, _, err = client.zid.groups.remove_user_from_group(group_id, user_id)
+    if err:
+        raise Exception(f"Failed to remove user {user_id} from group {group_id}: {err}")
+    return f"ZIdentity user {user_id} removed from group {group_id} successfully."

@@ -1,9 +1,35 @@
-from typing import Annotated, List, Optional, Union
+import json
+from typing import Annotated, Any, Dict, List, Optional, Union
 
 from pydantic import Field
 
 from zscaler_mcp.client import get_zscaler_client
 from zscaler_mcp.common.jmespath_utils import apply_jmespath
+
+
+JsonDict = Optional[Union[Dict[str, Any], str]]
+
+
+def _as_dict(value: Any) -> Any:
+    if hasattr(value, "as_dict"):
+        return value.as_dict()
+    if isinstance(value, list):
+        return [_as_dict(v) for v in value]
+    return value
+
+
+def _parse_dict(value: JsonDict) -> Dict[str, Any]:
+    if value is None:
+        return {}
+    if isinstance(value, str):
+        try:
+            parsed = json.loads(value)
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"Invalid JSON object: {exc}") from exc
+        if not isinstance(parsed, dict):
+            raise ValueError("JSON payload must be an object")
+        return parsed
+    return dict(value)
 
 
 def ztw_list_admins(
@@ -127,3 +153,97 @@ def ztw_list_admins(
 
     else:
         raise ValueError(f"Invalid action '{action}'. Must be 'list_admins' or 'get_admin'")
+
+
+# =============================================================================
+# WRITE OPERATIONS
+# =============================================================================
+
+
+def ztw_create_admin(
+    user_name: Annotated[str, Field(description="Admin display/user name.")],
+    login_name: Annotated[str, Field(description="Admin login name.")],
+    role: Annotated[str, Field(description="Admin role ID/name accepted by the SDK.")],
+    email: Annotated[str, Field(description="Admin email address.")],
+    password: Annotated[str, Field(description="Initial admin password.")],
+    payload: Annotated[JsonDict, Field(description="Additional admin fields accepted by the SDK.")] = None,
+    service: Annotated[str, Field(description="The service to use.")] = "ztw",
+) -> Dict:
+    """Create a ZTW admin user (write operation)."""
+    if not all([user_name, login_name, role, email, password]):
+        raise ValueError("user_name, login_name, role, email, and password are required")
+    body = _parse_dict(payload)
+
+    client = get_zscaler_client(service=service)
+    admin, _, err = client.ztw.admin_users.add_admin(
+        user_name=user_name,
+        login_name=login_name,
+        role=role,
+        email=email,
+        password=password,
+        **body,
+    )
+    if err:
+        raise Exception(f"Failed to create ZTW admin: {err}")
+    return _as_dict(admin)
+
+
+def ztw_update_admin(
+    admin_id: Annotated[Union[int, str], Field(description="Admin ID to update.")],
+    payload: Annotated[JsonDict, Field(description="Admin update body.")],
+    service: Annotated[str, Field(description="The service to use.")] = "ztw",
+) -> Dict:
+    """Update a ZTW admin user (write operation)."""
+    if not admin_id:
+        raise ValueError("admin_id is required")
+    body = _parse_dict(payload)
+    if not body:
+        raise ValueError("payload is required")
+
+    client = get_zscaler_client(service=service)
+    admin, _, err = client.ztw.admin_users.update_admin(str(admin_id), **body)
+    if err:
+        raise Exception(f"Failed to update ZTW admin {admin_id}: {err}")
+    return _as_dict(admin)
+
+
+def ztw_delete_admin(
+    admin_id: Annotated[Union[int, str], Field(description="Admin ID to delete.")],
+    service: Annotated[str, Field(description="The service to use.")] = "ztw",
+    kwargs: str = "{}",
+) -> str:
+    """Delete a ZTW admin user (destructive write operation)."""
+    from zscaler_mcp.common.elicitation import check_confirmation, extract_confirmed_from_kwargs
+
+    if not admin_id:
+        raise ValueError("admin_id is required")
+    confirmed = extract_confirmed_from_kwargs(kwargs)
+    confirmation_check = check_confirmation(
+        "ztw_delete_admin", confirmed, {"admin_id": str(admin_id)}
+    )
+    if confirmation_check:
+        return confirmation_check
+
+    client = get_zscaler_client(service=service)
+    result = client.ztw.admin_users.delete_admin(str(admin_id))
+    return f"ZTW admin {admin_id} deleted successfully. SDK result: {result}"
+
+
+def ztw_change_admin_password(
+    username: Annotated[str, Field(description="Admin username/login name.")],
+    old_password: Annotated[str, Field(description="Current password.")],
+    new_password: Annotated[str, Field(description="New password.")],
+    payload: Annotated[JsonDict, Field(description="Additional SDK request fields.")] = None,
+    service: Annotated[str, Field(description="The service to use.")] = "ztw",
+) -> Dict:
+    """Change a ZTW admin user's password (write operation)."""
+    if not username or not old_password or not new_password:
+        raise ValueError("username, old_password, and new_password are required")
+
+    client = get_zscaler_client(service=service)
+    result, _, err = client.ztw.admin_users.change_password(
+        username, old_password, new_password, **_parse_dict(payload)
+    )
+    if err:
+        raise Exception(f"Failed to change ZTW admin password for {username}: {err}")
+    return _as_dict(result)

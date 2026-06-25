@@ -1079,6 +1079,14 @@ _TOOL_TOOLSET_OVERRIDES: Dict[str, str] = {
     "get_zia_user_departments": "zia_users",
     "get_zia_dlp_dictionaries": "zia_dlp",
     "get_zia_dlp_engines": "zia_dlp",
+    "zia_create_dlp_dictionary": "zia_dlp",
+    "zia_update_dlp_dictionary": "zia_dlp",
+    "zia_delete_dlp_dictionary": "zia_dlp",
+    "zia_create_dlp_engine": "zia_dlp",
+    "zia_delete_dlp_engine": "zia_dlp",
+    "zia_attach_dictionary_to_engine": "zia_dlp",
+    "zia_attach_engine_to_policy": "zia_dlp",
+    "zia_simulate_dlp_match": "zia_dlp",
 
     # ---- ZIA: tools whose names don't include the toolset boundary ----
     "zia_geo_search": "zia_locations",

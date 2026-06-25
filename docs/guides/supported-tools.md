@@ -25,7 +25,7 @@ The Zscaler Integrations MCP Server provides tools for all major Zscaler service
 
 ## ZIA — Internet Access
 
-84 read-only tools, 82 write tools.
+85 read-only tools, 89 write tools.
 
 | Tool | Toolset | Type | Description |
 |------|---------|------|-------------|
@@ -112,16 +112,21 @@ The Zscaler Integrations MCP Server provides tools for all major Zscaler service
 | `zia_list_web_dlp_rules` | `zia_dlp` | Read-only | List ZIA web DLP rules (read-only) Supports JMESPath client-side filtering via the query parameter. |
 | `zia_list_web_dlp_rules_lite` | `zia_dlp` | Read-only | List ZIA web DLP rules in lite format (read-only) Supports JMESPath client-side filtering via the query parameter. |
 | `zia_list_workload_groups` | `zia_workload_groups` | Read-only | List ZIA workload groups, referenced by ID on the workload_groups operand of Cloud Firewall, URL Filtering, SSL Inspection, and Web DLP rules. Read-only — workload group authoring (with its expression DSL) is intentionally left to the ZIA UI. The ZIA list endpoint has no server-side name filter; pair with JMESPath query (e.g. "[?name=='WG-AWS-Prod']") to look up a group by name. |
+| `zia_simulate_dlp_match` | `zia_dlp` | Read-only | Locally simulate DLP dictionary phrase/pattern matches and optional DLP engine expression evaluation (read-only; does not mutate ZIA). |
 | `zia_url_lookup` | `zia_url_categories` | Read-only | Look up URL category for given URLs (read-only) |
 | `zia_activate_configuration` | `zia_admin` | Write | Activate ZIA configuration changes (write operation) |
 | `zia_add_atp_malicious_urls` | `zia_atp_policy` | Write | Add URLs to ZIA ATP malicious URL list (write operation) |
 | `zia_add_auth_exempt_urls` | `zia_authentication_settings` | Write | Add URLs to ZIA authentication exempt list (write operation) |
 | `zia_add_urls_to_category` | `zia_url_categories` | Write | Add URLs to a ZIA URL category (write operation) |
+| `zia_attach_dictionary_to_engine` | `zia_dlp` | Write | Attach a DLP dictionary to an existing custom DLP engine by appending a D<dictionary_id>.S threshold term to the engine expression (write operation). |
+| `zia_attach_engine_to_policy` | `zia_dlp` | Write | Attach a DLP engine to an existing ZIA Web DLP policy rule while preserving the rule's current scope (write operation). |
 | `zia_bulk_update_shadow_it_apps` | `zia_shadow_it` | Write | Bulk update sanction state and/or custom tags on ZIA Shadow IT cloud applications (write operation). |
 | `zia_create_cloud_app_control_rule` | `zia_cloud_app_control` | Write | Create a new ZIA Cloud App Control (CAC) rule (write operation). The CAC API is category-scoped — rule_type is REQUIRED (e.g. WEBMAIL, FILE_SHARE, AI_ML, SYSTEM_AND_DEVELOPMENT). Workflow: first call zia_list_cloud_app_control_actions(cloud_app=<app>) to discover both the correct rule_type (returned as `category`) AND the valid `actions` enums for that app, then pass those into this tool together with `name`, `cloud_applications`, and any scoping fields (groups, departments, locations, etc.). Friendly cloud-application names like 'Dropbox' are auto-resolved to canonical enums (DROPBOX). Note: the SDK kwarg for the apps list is `applications` but this tool surfaces it as `cloud_applications` for consistency with other ZIA rule families. |
 | `zia_create_cloud_firewall_dns_rule` | `zia_cloud_firewall` | Write | Create a new ZIA cloud firewall DNS rule (write operation). The `applications` field accepts the same canonical ZIA cloud-app names used by SSL Inspection / Web DLP / FTC / CAC in their `cloud_applications` field — DNS just exposes the field as `applications`. Friendly names (e.g. "OneDrive", "Cloudflare DoH") are auto-resolved. |
 | `zia_create_cloud_firewall_ips_rule` | `zia_cloud_firewall` | Write | Create a new ZIA cloud firewall IPS rule (write operation) |
 | `zia_create_cloud_firewall_rule` | `zia_cloud_firewall` | Write | Create a new ZIA cloud firewall rule (write operation) |
+| `zia_create_dlp_dictionary` | `zia_dlp` | Write | Create a custom ZIA DLP dictionary with phrase and/or regex pattern entries (write operation). After creating a dictionary, attach it to a DLP engine with zia_attach_dictionary_to_engine or create a new engine with zia_create_dlp_engine. |
+| `zia_create_dlp_engine` | `zia_dlp` | Write | Create a custom ZIA DLP engine from a DLP expression such as ((D63.S > 0) OR (D50.S > 0)) (write operation). |
 | `zia_create_file_type_control_rule` | `zia_file_type_control` | Write | Create a new ZIA File Type Control rule (write operation). Friendly cloud-application names are auto-resolved to canonical enums. |
 | `zia_create_gre_tunnel` | `zia_locations` | Write | Create a new ZIA GRE tunnel (write operation) |
 | `zia_create_ip_destination_group` | `zia_cloud_firewall` | Write | Create a new ZIA IP destination group (write operation) |
@@ -146,6 +151,8 @@ The Zscaler Integrations MCP Server provides tools for all major Zscaler service
 | `zia_delete_cloud_firewall_dns_rule` | `zia_cloud_firewall` | Write | Delete a ZIA cloud firewall DNS rule (destructive operation) |
 | `zia_delete_cloud_firewall_ips_rule` | `zia_cloud_firewall` | Write | Delete a ZIA cloud firewall IPS rule (destructive operation) |
 | `zia_delete_cloud_firewall_rule` | `zia_cloud_firewall` | Write | Delete a ZIA cloud firewall rule (destructive operation) |
+| `zia_delete_dlp_dictionary` | `zia_dlp` | Write | Delete a custom ZIA DLP dictionary by ID (destructive operation, requires HMAC confirmation token). |
+| `zia_delete_dlp_engine` | `zia_dlp` | Write | Delete a custom ZIA DLP engine by ID (destructive operation, requires HMAC confirmation token). |
 | `zia_delete_file_type_control_rule` | `zia_file_type_control` | Write | Delete a ZIA File Type Control rule (destructive operation) |
 | `zia_delete_gre_tunnel` | `zia_locations` | Write | Delete a ZIA GRE tunnel (destructive operation) |
 | `zia_delete_ip_destination_group` | `zia_cloud_firewall` | Write | Delete a ZIA IP destination group (destructive operation) |
@@ -175,6 +182,7 @@ The Zscaler Integrations MCP Server provides tools for all major Zscaler service
 | `zia_update_cloud_firewall_dns_rule` | `zia_cloud_firewall` | Write | Update an existing ZIA cloud firewall DNS rule (write operation). Update is a PUT — name/order are silently backfilled from the existing rule when not supplied. The `applications` field accepts canonical ZIA cloud-app names (same catalog as SSL/DLP/FTC/CAC's `cloud_applications`) and auto-resolves friendly names. |
 | `zia_update_cloud_firewall_ips_rule` | `zia_cloud_firewall` | Write | Update an existing ZIA cloud firewall IPS rule (write operation). Update is a PUT — name/order are silently backfilled from the existing rule when not supplied. |
 | `zia_update_cloud_firewall_rule` | `zia_cloud_firewall` | Write | Update an existing ZIA cloud firewall rule (write operation) |
+| `zia_update_dlp_dictionary` | `zia_dlp` | Write | Update a custom ZIA DLP dictionary (write operation). Supplied phrase/pattern lists are full replacements. |
 | `zia_update_file_type_control_rule` | `zia_file_type_control` | Write | Update an existing ZIA File Type Control rule (write operation). Update is a PUT — name/order are silently backfilled from the existing rule when not supplied. Friendly cloud-application names are auto-resolved. |
 | `zia_update_ip_destination_group` | `zia_cloud_firewall` | Write | Update an existing ZIA IP destination group (write operation) |
 | `zia_update_ip_source_group` | `zia_cloud_firewall` | Write | Update an existing ZIA IP source group (write operation) |
@@ -358,7 +366,7 @@ The Zscaler Integrations MCP Server provides tools for all major Zscaler service
 
 ## ZCC — Client Connector
 
-All 4 tools are read-only.
+4 read-only tools, 8 write tools.
 
 | Tool | Toolset | Type | Description |
 |------|---------|------|-------------|
@@ -366,12 +374,20 @@ All 4 tools are read-only.
 | `zcc_list_devices` | `zcc` | Read-only | Retrieves ZCC device enrollment information from the Zscaler Client Connector Portal (read-only) Supports JMESPath client-side filtering via the query parameter. |
 | `zcc_list_forwarding_profiles` | `zcc` | Read-only | Returns the list of Forwarding Profiles By Company ID in the Client Connector Portal (read-only) Supports JMESPath client-side filtering via the query parameter. |
 | `zcc_list_trusted_networks` | `zcc` | Read-only | Returns the list of Trusted Networks By Company ID in the Client Connector Portal (read-only) Supports JMESPath client-side filtering via the query parameter. |
+| `zcc_create_trusted_network` | `zcc` | Write | Create a ZCC trusted network (write operation). |
+| `zcc_delete_forwarding_profile` | `zcc` | Write | Delete a ZCC forwarding profile (destructive operation). |
+| `zcc_delete_trusted_network` | `zcc` | Write | Delete a ZCC trusted network (destructive operation). |
+| `zcc_remove_devices` | `zcc` | Write | Remove or force-remove ZCC devices from Client Connector (destructive operation). |
+| `zcc_remove_machine_tunnel` | `zcc` | Write | Remove a ZCC machine tunnel from a device (destructive operation). |
+| `zcc_update_device_cleanup_info` | `zcc` | Write | Update ZCC device cleanup settings (write operation). |
+| `zcc_update_forwarding_profile` | `zcc` | Write | Update a ZCC forwarding profile (write operation). |
+| `zcc_update_trusted_network` | `zcc` | Write | Update a ZCC trusted network (write operation). |
 
 ---
 
 ## ZTW — Workload Segmentation
 
-13 read-only tools, 6 write tools.
+13 read-only tools, 24 write tools.
 
 | Tool | Toolset | Type | Description |
 |------|---------|------|-------------|
@@ -388,18 +404,36 @@ All 4 tools are read-only.
 | `ztw_list_public_account_details` | `ztw` | Read-only | List detailed ZTW public cloud account information (read-only) Supports JMESPath client-side filtering via the query parameter. |
 | `ztw_list_public_cloud_info` | `ztw` | Read-only | List ZTW public cloud accounts with metadata (read-only) Supports JMESPath client-side filtering via the query parameter. |
 | `ztw_list_roles` | `ztw` | Read-only | List all existing admin roles in ZTW (read-only) Supports JMESPath client-side filtering via the query parameter. |
+| `ztw_change_admin_password` | `ztw` | Write | Change a ZTW admin user's password (write operation) |
+| `ztw_change_public_cloud_info_state` | `ztw` | Write | Change ZTW public cloud account state (write operation) |
+| `ztw_create_admin` | `ztw` | Write | Create a ZTW admin user (write operation) |
 | `ztw_create_ip_destination_group` | `zia_cloud_firewall` | Write | Create a new ZTW IP destination group (write operation) |
 | `ztw_create_ip_group` | `ztw` | Write | Create a new ZTW IP group (write operation) |
 | `ztw_create_ip_source_group` | `zia_cloud_firewall` | Write | Create a new ZTW IP source group (write operation) |
+| `ztw_create_network_service` | `zia_cloud_firewall` | Write | Create a new ZTW network service (write operation) |
+| `ztw_create_public_cloud_info` | `ztw` | Write | Create ZTW public cloud account info (write operation) |
+| `ztw_create_role` | `ztw` | Write | Create a ZTW admin role (write operation) |
+| `ztw_delete_admin` | `ztw` | Write | Delete a ZTW admin user (destructive operation) |
 | `ztw_delete_ip_destination_group` | `zia_cloud_firewall` | Write | Delete a ZTW IP destination group (destructive operation) |
 | `ztw_delete_ip_group` | `ztw` | Write | Delete a ZTW IP group (destructive operation) |
 | `ztw_delete_ip_source_group` | `zia_cloud_firewall` | Write | Delete a ZTW IP source group (destructive operation) |
+| `ztw_delete_network_service` | `zia_cloud_firewall` | Write | Delete a ZTW network service (destructive operation) |
+| `ztw_delete_public_cloud_info` | `ztw` | Write | Delete ZTW public cloud account info (destructive operation) |
+| `ztw_delete_role` | `ztw` | Write | Delete a ZTW admin role (destructive operation) |
+| `ztw_generate_public_cloud_external_id` | `ztw` | Write | Generate a ZTW public cloud external ID (write/helper operation) |
+| `ztw_update_admin` | `ztw` | Write | Update a ZTW admin user (write operation) |
+| `ztw_update_discovery_service_permissions` | `ztw` | Write | Update ZTW workload discovery service permissions (write operation) |
+| `ztw_update_ip_destination_group` | `zia_cloud_firewall` | Write | Update an existing ZTW IP destination group (write operation) |
+| `ztw_update_network_service` | `zia_cloud_firewall` | Write | Update an existing ZTW network service (write operation) |
+| `ztw_update_public_account_status` | `ztw` | Write | Update ZTW public cloud account status (write operation) |
+| `ztw_update_public_cloud_info` | `ztw` | Write | Update ZTW public cloud account info (write operation) |
+| `ztw_update_role` | `ztw` | Write | Update a ZTW admin role (write operation) |
 
 ---
 
 ## ZIdentity
 
-All 10 tools are read-only.
+10 read-only tools, 9 write tools.
 
 | Tool | Toolset | Type | Description |
 |------|---------|------|-------------|
@@ -413,6 +447,15 @@ All 10 tools are read-only.
 | `zid_list_users` | `zid` | Read-only | List ZIdentity users (read-only) Supports JMESPath client-side filtering via the query parameter. |
 | `zid_search_groups` | `zid` | Read-only | Search ZIdentity groups (read-only) |
 | `zid_search_users` | `zid` | Read-only | Search ZIdentity users (read-only) |
+| `zid_add_user_to_group` | `zid` | Write | Add a ZIdentity user to a group (write operation) |
+| `zid_add_users_to_group` | `zid` | Write | Add multiple ZIdentity users to a group (write operation) |
+| `zid_create_group` | `zid` | Write | Create a ZIdentity group (write operation) |
+| `zid_create_user` | `zid` | Write | Create a ZIdentity user (write operation) |
+| `zid_delete_group` | `zid` | Write | Delete a ZIdentity group (destructive operation) |
+| `zid_delete_user` | `zid` | Write | Delete a ZIdentity user (destructive operation) |
+| `zid_remove_user_from_group` | `zid` | Write | Remove a ZIdentity user from a group (destructive operation) |
+| `zid_update_group` | `zid` | Write | Update a ZIdentity group (write operation) |
+| `zid_update_user` | `zid` | Write | Update a ZIdentity user (write operation) |
 
 ---
 

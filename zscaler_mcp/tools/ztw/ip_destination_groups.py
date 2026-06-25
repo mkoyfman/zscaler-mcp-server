@@ -120,6 +120,60 @@ def ztw_create_ip_destination_group(
     return group.as_dict()
 
 
+def ztw_update_ip_destination_group(
+    group_id: Annotated[Union[int, str], Field(description="Group ID (required).")],
+    name: Annotated[Optional[str], Field(description="Updated destination group name.")] = None,
+    type: Annotated[
+        Optional[str],
+        Field(description="Updated group type: DSTN_IP, DSTN_FQDN, DSTN_DOMAIN, or DSTN_OTHER."),
+    ] = None,
+    description: Annotated[Optional[str], Field(description="Updated description.")] = None,
+    addresses: Annotated[
+        Optional[Union[List[str], str]],
+        Field(description="Replacement list of IPs/FQDNs. Accepts JSON string or list."),
+    ] = None,
+    countries: Annotated[
+        Optional[Union[List[str], str]],
+        Field(description="Replacement list of countries for DSTN_OTHER groups."),
+    ] = None,
+    query_params: Annotated[
+        Optional[Dict],
+        Field(description="Optional SDK query parameters."),
+    ] = None,
+    service: Annotated[str, Field(description="The service to use.")] = "ztw",
+) -> Dict:
+    """Update a ZTW IP destination group."""
+    if not group_id:
+        raise ValueError("group_id is required")
+
+    payload: Dict[str, object] = {}
+    if name is not None:
+        payload["name"] = name
+    if type is not None:
+        payload["type"] = type
+    if description is not None:
+        payload["description"] = description
+    if addresses is not None:
+        payload["addresses"] = parse_list(addresses)
+    if countries is not None:
+        converted_countries = validate_and_convert_country_codes(countries)
+        if type and type != "DSTN_OTHER":
+            raise ValueError("Countries are only supported when type is DSTN_OTHER")
+        payload["countries"] = converted_countries
+    if not payload:
+        raise ValueError("At least one update field is required")
+
+    client = get_zscaler_client(service=service)
+    ztw = client.ztw.ip_destination_groups
+
+    group, _, err = ztw.update_ip_destination_group(
+        str(group_id), query_params=query_params or {}, **payload
+    )
+    if err:
+        raise Exception(f"Failed to update IP destination group {group_id}: {err}")
+    return group.as_dict()
+
+
 def ztw_delete_ip_destination_group(
     group_id: Annotated[Union[int, str], Field(description="Group ID (required).")],
     service: Annotated[str, Field(description="The service to use.")] = "ztw",
