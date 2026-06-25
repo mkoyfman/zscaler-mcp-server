@@ -54,6 +54,12 @@ def test_missing_delegated_field_does_not_fall_back_to_environment(monkeypatch):
         reset_delegated_credentials(token)
 
 
+def test_customer_id_allows_zscaler_domain_style_values():
+    credentials = _credentials(customer_id="zscalerthree.net-177954596")
+
+    assert credentials.customer_id == "zscalerthree.net-177954596"
+
+
 @pytest.mark.parametrize(
     ("field", "value"),
     [

@@ -8,7 +8,7 @@
     "enabled": true
   },
   "vars": {
-    "CONTAINER_INSTANCE_NAME": "zscaler-mcp",
+    "CONTAINER_INSTANCE_NAME": "zscaler-mcp-v2",
     "ZSCALER_MCP_TRANSPORT": "streamable-http",
     "ZSCALER_MCP_HOST": "0.0.0.0",
     "ZSCALER_MCP_PORT": "8000",

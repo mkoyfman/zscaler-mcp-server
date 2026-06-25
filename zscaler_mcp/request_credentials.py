@@ -12,7 +12,7 @@ import re
 from typing import Optional
 
 _VANITY_DOMAIN_RE = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?$")
-_CUSTOMER_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
+_CUSTOMER_ID_RE = re.compile(r"^[A-Za-z0-9_.-]{1,128}$")
 _SUPPORTED_CLOUDS = frozenset({"production", "beta"})
 
 
@@ -42,7 +42,7 @@ class DelegatedZscalerCredentials:
         object.__setattr__(self, "cloud", normalized_cloud)
         if self.customer_id is not None and not _CUSTOMER_ID_RE.fullmatch(self.customer_id):
             raise ValueError(
-                "customer_id must contain only letters, numbers, underscores, or hyphens"
+                "customer_id must contain only letters, numbers, dots, underscores, or hyphens"
             )
 
 
