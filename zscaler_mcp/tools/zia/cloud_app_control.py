@@ -586,6 +586,7 @@ def _build_cbi_profile(
     profile_name = isolation_profile_name
     if profile_name is None:
         profile_name = profile.get("name") or profile.get("profile_name") or profile.get("profileName")
+    profile_url = profile.get("url") or profile.get("profile_url") or profile.get("profileUrl")
 
     if profile_id is None and profile_name is None:
         return None
@@ -594,7 +595,10 @@ def _build_cbi_profile(
             "ZIA isolate actions require both isolation_profile_id and "
             "isolation_profile_name, or cbi_profile with both id and name."
         )
-    return {"id": profile_id, "name": profile_name}
+    cbi_payload = {"id": profile_id, "name": profile_name}
+    if profile_url:
+        cbi_payload["url"] = profile_url
+    return cbi_payload
 
 
 def _build_cac_rule_payload(
